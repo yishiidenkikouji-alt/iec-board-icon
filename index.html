@@ -2,84 +2,41 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1.0">
 
   <title>行き先ホワイトボード</title>
 
-  <!-- ブラウザのアイコン -->
-  <link rel="icon" type="image/png" href="./iec_home_icon.png">
+  <!-- ホーム画面アイコン -->
+  <link rel="icon"
+        type="image/png"
+        href="./whiteboard-icon.png">
 
-  <!-- iPhone / iPad ホーム画面用アイコン -->
-  <link rel="apple-touch-icon" href="./iec_home_icon.png">
+  <link rel="apple-touch-icon"
+        sizes="180x180"
+        href="./whiteboard-icon.png">
 
-  <meta name="theme-color" content="#ffffff">
+  <meta name="apple-mobile-web-app-capable"
+        content="yes">
 
-  <style>
-    body {
-      margin: 0;
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: #f5f7fa;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
-                   "Noto Sans JP", sans-serif;
-    }
+  <meta name="apple-mobile-web-app-status-bar-style"
+        content="default">
 
-    .box {
-      text-align: center;
-      padding: 30px;
-    }
+  <meta name="apple-mobile-web-app-title"
+        content="行き先ボード">
 
-    .logo {
-      width: 180px;
-      max-width: 60vw;
-      margin-bottom: 30px;
-    }
+  <!-- GASホワイトボードへ即時移動 -->
+  <meta http-equiv="refresh"
+        content="0;url=https://script.google.com/macros/s/AKfycbyDl12j_i0NvCN45tSVgM0ngzAWE73hpuz69Mm9MMRQT_gZkrNJXgJNlGqAee-YG_7c/exec">
 
-    h1 {
-      font-size: 22px;
-      margin-bottom: 25px;
-      color: #333;
-    }
-
-    .button {
-      display: inline-block;
-      padding: 15px 30px;
-      background: #0b5fa5;
-      color: white;
-      text-decoration: none;
-      border-radius: 10px;
-      font-size: 18px;
-      font-weight: bold;
-    }
-
-    .button:active {
-      opacity: 0.8;
-    }
-  </style>
+  <script>
+    window.location.replace(
+      "https://script.google.com/macros/s/AKfycbyDl12j_i0NvCN45tSVgM0ngzAWE73hpuz69Mm9MMRQT_gZkrNJXgJNlGqAee-YG_7c/exec"
+    );
+  </script>
 </head>
 
 <body>
-
-  <div class="box">
-
-    <img
-      src="./iec_home_icon.png"
-      alt="iec"
-      class="logo"
-    >
-
-    <h1>行き先ホワイトボード</h1>
-
-    <a
-      class="button"
-      href="https://script.google.com/macros/s/AKfycbxj_q6b1eqmeSxIh6FRH8TJRS2-FNv8Y4P1GHusqkStmmhvmmYFw91Dsm3uBkTGljWb/exec"
-    >
-      行き先ホワイトボードを開く
-    </a>
-
-  </div>
-
 </body>
 </html>
