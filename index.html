@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
 
   <meta name="viewport"
-        content="width=device-width, initial-scale=1.0">
+        content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 
   <title>行き先ホワイトボード</title>
 
@@ -26,17 +26,38 @@
   <meta name="apple-mobile-web-app-title"
         content="行き先ボード">
 
-  <!-- GASホワイトボードへ即時移動 -->
-  <meta http-equiv="refresh"
-        content="0;url=https://script.google.com/macros/s/AKfycbyDl12j_i0NvCN45tSVgM0ngzAWE73hpuz69Mm9MMRQT_gZkrNJXgJNlGqAee-YG_7c/exec">
+  <style>
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #eceff1;
+    }
 
-  <script>
-    window.location.replace(
-      "https://script.google.com/macros/s/AKfycbyDl12j_i0NvCN45tSVgM0ngzAWE73hpuz69Mm9MMRQT_gZkrNJXgJNlGqAee-YG_7c/exec"
-    );
-  </script>
+    #whiteboard {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border: 0;
+      margin: 0;
+      padding: 0;
+      display: block;
+    }
+  </style>
 </head>
 
 <body>
+
+  <iframe
+    id="whiteboard"
+    src="https://script.google.com/macros/s/AKfycbyDl12j_i0NvCN45tSVgM0ngzAWE73hpuz69Mm9MMRQT_gZkrNJXgJNlGqAee-YG_7c/exec"
+    allow="fullscreen">
+  </iframe>
+
 </body>
 </html>
