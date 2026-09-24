@@ -1,18 +1,21 @@
-/* IEC GitHub Pages entry: foreground badging trial v1.
+/* IEC GitHub Pages entry: foreground badging + Android notification trial v2.
  * Configure only the GAS /exec URL in config.js. Nothing private belongs here.
  */
 (function(){
   'use strict';
   const APP='iec-board-badge', PROTOCOL=1;
   const URL_KEY='iec.board.pwa.gasUrl.v1';
-  const VERSION=String((window.IEC_PWA_CONFIG||{}).version||'2026.09.24-r16-pwa1');
+  const VERSION='2026.09.24-r16-pwa2-android';
+  const ENTRY=new URL('./',window.location.href);
+  const NOTIFY_KEY='iec.board.pwa.notifications:'+ENTRY.pathname;
+  const NOTIFY_TAG=APP+':'+ENTRY.pathname+':snapshot';
   const el=id=>document.getElementById(id);
   const frame=el('boardFrame');
   const state={
     gasUrl:'',source:null,origin:'',pageId:'',session:'',sequence:0,
     count:null,updatedAt:0,status:'waiting',receivedAt:0,permissionBusy:false,
     testing:false,worker:'確認中',notice:'',badgeBusy:false,badgeDesired:null,
-    badgeRevision:0,lastApplied:null,loadStarted:0
+    badgeRevision:0,lastApplied:null,loadStarted:0,notifyEnabled:false,notifyLast:null
   };
   let lastFocus=null, closeReloadTimer=null;
   function randomId(){
@@ -30,16 +33,65 @@
   function isStandalone(){return !!((window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true);}
   function environment(){
     const ios=/iPhone|iPad|iPod/i.test(navigator.userAgent||'')||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+    const android=/Android/i.test(navigator.userAgent||'');
+    const direct=typeof navigator.setAppBadge==='function';
+    const mode=direct?'badge':android?'notification':'unsupported';
     let permission='unavailable';try{if('Notification' in window)permission=Notification.permission;}catch(e){}
     let reason='';
     if(!window.isSecureContext)reason='HTTPSで公開した入口を開いてください。';
     else if(window.top!==window)reason='この入口は別のページへ埋め込まず、直接開いてください。';
-    else if(!isStandalone())reason=ios?'Safariの共有メニューからこの入口をホーム画面に追加し、新しいアイコンから開いてください。':'ブラウザーのアプリのインストール機能またはホーム画面への追加を使い、新しいアイコンから開いてください。';
-    else if(typeof navigator.setAppBadge!=='function')reason='このブラウザー・OSではアイコンのバッジ更新APIを利用できません。画面内の件数は表示できます。';
+    else if(mode==='notification'){
+      // Android can request notifications even when the numeric Badging API is absent.
+      if(permission==='unavailable'||typeof Notification.requestPermission!=='function'||!('serviceWorker' in navigator))
+        reason='このブラウザーでは通知を利用できません。AndroidのChromeで入口を直接開いてください。';
+    }else if(!isStandalone())reason=ios?'Safariの共有メニューからこの入口をホーム画面に追加し、新しいアイコンから開いてください。':'ブラウザーのアプリのインストール機能で入口を追加し、そのアイコンから開いてください。';
+    else if(!direct)reason='このブラウザー・OSではアイコンのバッジ更新APIを利用できません。画面内の件数は表示できます。';
     else if(ios&&permission==='unavailable')reason='この起動環境では通知の許可を取得できません。対応OSのホーム画面アイコンから開いてください。';
-    return {ios:ios,permission:permission,supported:!reason,reason:reason};
+    return {ios:ios,android:android,mode:mode,needsPermission:ios||mode==='notification',permission:permission,supported:!reason,reason:reason};
   }
-  function canApply(){const env=environment();return env.supported&&(!env.ios||env.permission==='granted');}
+  function canApply(){
+    const env=environment();
+    return env.supported&&(!env.needsPermission||env.permission==='granted')&&(env.mode!=='notification'||state.notifyEnabled);
+  }
+  function setNotificationEnabled(enabled){
+    state.notifyEnabled=!!enabled;
+    try{localStorage.setItem(NOTIFY_KEY,enabled?'1':'0');}catch(e){}
+  }
+  async function publishNotification(count,testing,current){
+    const registration=await navigator.serviceWorker.ready;
+    if(!current()||!state.notifyEnabled||Notification.permission!=='granted')return;
+    if(registration.scope!==ENTRY.href||typeof registration.showNotification!=='function')
+      throw new Error('入口の通知準備が完了していません。入口を開き直してください。');
+    const key=(testing?'test:':'actual:')+count;
+    if(count===0){
+      const shown=await registration.getNotifications({tag:NOTIFY_TAG});
+      if(!current())return;
+      shown.forEach(notification=>notification.close());state.notifyLast=key;return;
+    }
+    // One snapshot notification only. Do not re-post unchanged counts after dismissal.
+    if(state.notifyLast===key)return;
+    await registration.showNotification(testing?'行き先ボード：通知テスト':'行き先ホワイトボード',{
+      body:testing?'通知の試験です（1件）。ホーム画面の通知ドットを確認してください。':'本人の要対応：'+count+'件（取得時点）。最新の内容はボードで確認してください。',
+      tag:NOTIFY_TAG,icon:new URL('../whiteboard-icon.png',ENTRY).href,
+      lang:'ja',silent:true,renotify:false,
+      timestamp:testing?Date.now():(state.updatedAt||Date.now())
+    });
+    if(current())state.notifyLast=key;
+  }
+  async function stopNotifications(){
+    if(environment().mode!=='notification')return;
+    setNotificationEnabled(false);state.testing=false;state.badgeDesired=null;state.notifyLast=null;
+    const revision=++state.badgeRevision;
+    render();
+    try{
+      const registration=await navigator.serviceWorker.getRegistration(ENTRY.href);
+      if(registration&&registration.scope===ENTRY.href){
+        const shown=await registration.getNotifications({tag:NOTIFY_TAG});
+        if(revision===state.badgeRevision&&!state.notifyEnabled)shown.forEach(notification=>notification.close());
+      }
+      notice('この入口からの件数通知を停止しました。ブラウザーの通知許可自体は変更していません。');
+    }catch(e){notice('件数通知は停止しました。表示済みの通知は通知欄から消してください。');}
+  }
   function notice(text){state.notice=String(text||'');el('actionStatus').textContent=state.notice;}
   function stale(){return !!state.updatedAt&&Date.now()-state.updatedAt>7*60*1000;}
   function render(){
@@ -51,16 +103,31 @@
     el('bridgeState').textContent=state.source?'接続済み'+(ready?'':'／最新件数を確認中'):state.gasUrl?'連携待ち（GAS用Indexの更新・利用者登録を確認）':'接続先URLが未設定';
     el('actualCount').textContent=state.count===null?'未取得':state.count+'件'+(!ready?'（最後の取得値）':'');
     el('receivedAt').textContent=state.receivedAt?new Date(state.receivedAt).toLocaleTimeString('ja-JP'):'—';
-    el('environmentStatus').textContent=env.reason||(env.ios&&env.permission!=='granted'
-      ? env.permission==='denied'?'端末の「設定 → 通知」で、この入口の通知とバッジを確認してください。':'この入口から通知を許可すると、ホーム画面のバッジ更新を試せます。'
-      : '更新APIを利用できます。実際の数字の表示はホーム画面で確認してください。');
+    const notificationMode=env.mode==='notification';
+    if(notificationMode){
+      el('environmentStatus').textContent=env.reason||'Androidは通知に連動する点などの表示です。アイコンの数字を要対応件数にそろえることは保証できません。'+(!isStandalone()?' ホーム画面から使う場合は、Chromeのメニューから入口をインストールしてください。':'');
+    }else{
+      el('environmentStatus').textContent=env.reason||(env.ios&&env.permission!=='granted'
+        ? env.permission==='denied'?'端末の「設定 → 通知」で、この入口の通知とバッジを確認してください。':'この入口から通知を許可すると、ホーム画面のバッジ更新を試せます。'
+        : '更新APIを利用できます。実際の数字の表示はホーム画面で確認してください。');
+    }
+    const help=el('androidNotificationHelp'),stop=el('stopNotificationsButton');
+    if(help)help.hidden=!notificationMode;
+    if(stop){stop.hidden=!notificationMode;stop.disabled=!state.notifyEnabled;}
     el('permissionButton').disabled=state.permissionBusy;
-    el('permissionButton').textContent=state.permissionBusy?'許可を確認中…':canApply()?'実件数をバッジへ反映':'バッジを有効にする';
+    el('permissionButton').textContent=state.permissionBusy?'許可を確認中…':notificationMode
+      ? env.permission==='denied'?'通知設定の確認方法':state.notifyEnabled&&env.permission==='granted'?'実件数を通知へ反映':'通知を許可して有効にする'
+      :canApply()?'実件数をバッジへ反映':'バッジを有効にする';
+    el('testButton').textContent=notificationMode?'テスト通知を1件表示':'試験で「1」を表示';
+    const testSummary=el('testSummary'),testHelp=el('testHelp'),testFoot=el('testFoot');
+    if(testSummary)testSummary.textContent=notificationMode?'実機で通知を試す':'実機で数字を試す';
+    if(testHelp)testHelp.textContent=notificationMode?'テスト通知を1件表示します。端末の通知欄とホーム画面の点などを確認してください。数字「1」が出る試験ではありません。':'「試験で1を表示」は実件数とは別です。ホーム画面へ戻り、新しいアイコンの「1」を確認してください。';
+    if(testFoot)testFoot.textContent=notificationMode?'試験終了でテスト通知を消し、実件数を取得済みなら件数通知へ戻します。未取得なら通知を消します。':'試験中は実件数を受け取っても「1」を維持します。終了で実件数に戻り、未取得なら試験数字を消します。';
     el('refreshButton').disabled=!state.source;
     el('endTestButton').disabled=!state.testing;
     el('reloadBoardButton').disabled=!state.gasUrl;
     let label;
-    if(state.testing)label='試験中：アイコンに「1」';
+    if(state.testing)label=notificationMode?'試験中：通知1件（数字バッジではありません）':'試験中：アイコンに「1」';
     else if(ready)label='本人の要対応：'+state.count+'件';
     else if(state.status==='no-user'||state.status==='reset')label='利用者・件数を確認中';
     else if(state.count!==null)label='要対応：'+state.count+'件（再確認待ち）';
@@ -110,14 +177,19 @@
     try{
       do{
         const count=state.badgeDesired;seen=state.badgeRevision;
-        let timer;
+        let timer,active=true;
         try{
-          const operation=count===0&&typeof navigator.clearAppBadge==='function'?navigator.clearAppBadge():navigator.setAppBadge(count);
+          const notificationMode=environment().mode==='notification';
+          const operation=notificationMode
+            ?publishNotification(count,state.testing,()=>active&&seen===state.badgeRevision)
+            :count===0&&typeof navigator.clearAppBadge==='function'?navigator.clearAppBadge():navigator.setAppBadge(count);
           await Promise.race([Promise.resolve(operation),new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('バッジ更新の応答を確認できません。アプリを開き直してください。')),8000);})]);
-        }finally{clearTimeout(timer);}
+        }finally{active=false;clearTimeout(timer);}
         state.lastApplied=count;
       }while(seen!==state.badgeRevision&&canApply());
-      notice((state.testing?'試験の「1」':'件数')+'を更新APIへ送信しました。ホーム画面へ戻り、新しいアイコンで確認してください。');
+      if(seen!==state.badgeRevision||!canApply())return;
+      if(environment().mode==='notification')notice('通知APIの処理が完了しました。端末の通知欄で確認してください。アイコンの点・数字は端末とホームアプリの設定により異なります。');
+      else notice((state.testing?'試験の「1」':'件数')+'を更新APIへ送信しました。ホーム画面へ戻り、新しいアイコンで確認してください。');
     }catch(e){notice('バッジ更新を確認できません：'+String(e&&e.message||e));}
     finally{state.badgeBusy=false;render();}
   }
@@ -156,8 +228,8 @@
     if(state.permissionBusy)return;
     const env=environment();
     if(!env.supported){notice(env.reason);render();return;}
-    if(env.ios&&env.permission==='denied'){notice('端末の「設定 → 通知」で、この新しい入口の通知とバッジを許可してください。拒否済みの設定はこのボタンでは変更できません。');return;}
-    if(env.ios&&env.permission!=='granted'){
+    if(env.needsPermission&&env.permission==='denied'){notice(env.mode==='notification'?'Chromeで入口を開き、サイトの権限 → 通知を確認してください。Android本体の設定 → アプリ → Chrome（または行き先ボード）→ 通知も確認してください。拒否済みの設定はこのボタンでは変更できません。':'端末の「設定 → 通知」で、この新しい入口の通知とバッジを許可してください。拒否済みの設定はこのボタンでは変更できません。');return;}
+    if(env.needsPermission&&env.permission!=='granted'){
       state.permissionBusy=true;render();let timer;
       try{
         // Must run in this direct tap handler, before any awaited network or SW work.
@@ -167,9 +239,10 @@
       }catch(e){notice(String(e&&e.message||e));return;}
       finally{clearTimeout(timer);state.permissionBusy=false;render();}
     }
+    if(env.mode==='notification'){setNotificationEnabled(true);state.notifyLast=null;render();}
     if(state.testing)queueBadge(1);
     else if(state.status==='ready'&&!stale())applyActual();
-    else notice('通知許可を確認しました。まだ実件数を取得できていません。「件数を更新」または「試験で1を表示」で確認してください。');
+    else notice(env.mode==='notification'?'通知許可を確認しました。「実機で通知を試す」→「テスト通知を1件表示」で確認してください。GAS接続後は取得した件数を通知本文に表示します。':'通知許可を確認しました。まだ実件数を取得できていません。「件数を更新」または「試験で1を表示」で確認してください。');
   }
   function configureFrame(url){
     state.gasUrl=url;state.source=null;state.origin='';state.pageId='';state.session='';state.sequence=0;
@@ -202,11 +275,12 @@
     }
   });
   el('permissionButton').onclick=permissionOrUpdate;
+  if(el('stopNotificationsButton'))el('stopNotificationsButton').onclick=stopNotifications;
   el('refreshButton').onclick=()=>{send('refresh');notice('最新件数を要求しました。GASの応答を待っています。');};
   el('testButton').onclick=()=>{
     const env=environment();
-    if(!canApply()){notice(env.reason||'先に「バッジを有効にする」で通知を許可してください。');return;}
-    state.testing=true;queueBadge(1);render();
+    if(!canApply()){notice(env.reason||(env.mode==='notification'?'先に「通知を許可して有効にする」を押してください。':'先に「バッジを有効にする」で通知を許可してください。'));return;}
+    state.testing=true;state.notifyLast=null;queueBadge(1);render();
   };
   el('endTestButton').onclick=()=>{
     state.testing=false;
@@ -232,7 +306,7 @@
     render();
   }
   if(window.top!==window){el('startStatus').textContent='この入口は直接開いてください。';render();return;}
-  let saved='';try{saved=localStorage.getItem(URL_KEY)||'';}catch(e){}
+  let saved='';try{saved=localStorage.getItem(URL_KEY)||'';state.notifyEnabled=localStorage.getItem(NOTIFY_KEY)==='1';}catch(e){}
   const url=normaliseUrl(saved)||normaliseUrl((window.IEC_PWA_CONFIG||{}).gasUrl);
   if(url)configureFrame(url);
   else {el('startStatus').textContent='接続先の /exec URLを「接続先設定」で登録してください。バッジ単独の実機試験は、接続前でも実行できます。';render();}

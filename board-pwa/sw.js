@@ -5,7 +5,7 @@
 'use strict';
 const ROOT=new URL('./',self.location.href);
 const PREFIX='iec-board-pwa-shell:'+ROOT.pathname+':';
-const CACHE=PREFIX+'v1';
+const CACHE=PREFIX+'v2-android-notification';
 const FILES=['./','./index.html','./styles.css','./config.js','./app.js','./manifest.webmanifest'];
 const PUBLIC_URLS=FILES.map(path=>new URL(path,ROOT).href);
 self.addEventListener('install',event=>{
@@ -27,4 +27,20 @@ self.addEventListener('fetch',event=>{
     }
     return response;
   }).catch(()=>caches.match(plain).then(saved=>saved||Response.error())));
+});
+
+// Only handle this entry's visible snapshot notifications. No push subscription.
+self.addEventListener('notificationclick',event=>{
+  if(event.notification.tag!=='iec-board-badge:'+ROOT.pathname+':snapshot')return;
+  event.notification.close();
+  event.waitUntil((async()=>{
+    const windows=await self.clients.matchAll({type:'window',includeUncontrolled:true});
+    for(const client of windows){
+      const url=new URL(client.url);
+      if(url.origin===ROOT.origin&&(url.pathname===ROOT.pathname||url.pathname===ROOT.pathname+'index.html')){
+        try{return await client.focus();}catch(e){}
+      }
+    }
+    return self.clients.openWindow(ROOT.href);
+  })());
 });

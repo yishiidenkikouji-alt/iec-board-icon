@@ -27,7 +27,7 @@
     <p>GASのホワイトボードとホーム画面バッジをつなぐ入口です。</p>
     <p id="startStatus">接続先を確認しています。</p>
     <button type="button" id="connectButton">接続先設定</button>
-    <p>初回はSafariでこのページを開き、共有メニューから「ホーム画面に追加」。追加したアイコンから開いてください。</p>
+    <p>iPhoneはSafariの共有メニューから「ホーム画面に追加」。AndroidはChromeでこのページを開き、メニューから「ホーム画面に追加」または「アプリをインストール」。追加したアイコンから開いてください。</p>
     <p class="small">従来のアイコンは、試験が済むまで残してください。</p>
   </div>
   <iframe id="boardFrame" title="行き先ホワイトボード" referrerpolicy="no-referrer" allow="geolocation *; camera *; clipboard-write *" hidden></iframe>
@@ -36,7 +36,9 @@
   <section id="settingsSheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" tabindex="-1">
     <header class="sheet-heading"><h2 id="sheetTitle">ホーム画面バッジ</h2><button type="button" id="closeSettings" aria-label="設定を閉じる">×</button></header>
     <p id="environmentStatus"></p>
+    <p id="androidNotificationHelp" class="small" hidden>Androidの「有効にする」は通知を表示する許可です。有効後はアプリを開いている間に取得した要対応件数を1件の通知にまとめます。件数は通知本文で確認してください。通知を消すとアイコンの点も消える場合があります。閉じている間の新規取得・プッシュ配信はしません。件数が通知欄やロック画面に表示される場合があります。</p>
     <div class="buttons"><button type="button" id="permissionButton">バッジを有効にする</button><button type="button" id="refreshButton">件数を更新</button></div>
+    <div class="buttons"><button type="button" id="stopNotificationsButton" hidden>件数通知を停止</button></div>
     <p id="actionStatus" role="status" aria-live="polite"></p>
     <dl id="diagnostics">
       <dt>入口版</dt><dd id="entryVersion">—</dd>
@@ -48,10 +50,10 @@
       <dt>入口の準備</dt><dd id="workerState">確認中</dd>
     </dl>
     <details>
-      <summary>実機で数字を試す</summary>
-      <p>「試験で1を表示」は実件数とは別です。押した後にホーム画面へ戻り、新しいアイコンの「1」を確認してください。</p>
+      <summary id="testSummary">実機で数字を試す</summary>
+      <p id="testHelp">「試験で1を表示」は実件数とは別です。押した後にホーム画面へ戻り、新しいアイコンの「1」を確認してください。</p>
       <div class="buttons"><button type="button" id="testButton">試験で「1」を表示</button><button type="button" id="endTestButton">試験を終了して実件数へ戻す</button></div>
-      <p class="small">試験中は実件数を受け取っても「1」を維持します。終了ボタンを押すと実件数に戻り、未取得なら試験数字を消します。</p>
+      <p id="testFoot" class="small">試験中は実件数を受け取っても「1」を維持します。終了ボタンを押すと実件数に戻り、未取得なら試験数字を消します。</p>
     </details>
     <details id="connectionDetails">
       <summary>接続先設定・読み込み直し</summary>
@@ -68,7 +70,7 @@
       <summary>今回の範囲・確認できないとき</summary>
       <p>開いている間の更新だけを試す版です。閉じている間は、新しい件数を取得しません。プッシュ通知の送信処理は含まれていません。</p>
       <p>iPhoneではiOS 16.4以降のホーム画面Webアプリと通知許可が必要です。通知が許可済みでも、端末の「設定 → 通知」でバッジだけオフにできるため、実際の数字はホーム画面で確認してください。</p>
-      <p>Androidなどはブラウザーとホームアプリによって対応が異なります。対応APIがない環境でアイコンの数字を出したと表示することはありません。</p>
+      <p>Androidで数字バッジAPIがない場合は、通知を使います。通知本文には件数を表示しますが、アイコンの点・数字は端末とホームアプリに依存し、要対応件数と同じ数字になるとは限りません。</p>
       <p>氏名・権限コード・トークン・文書内容は入口に送らず、件数と接続状態だけを受け取ります。GAS側の権限は変更しません。</p>
     </details>
   </section>
