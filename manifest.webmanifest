@@ -1,0 +1,14 @@
+{
+  "id": "./",
+  "name": "行き先ホワイトボード",
+  "short_name": "行き先ボード",
+  "lang": "ja",
+  "start_url": "./?installed=1",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#eceff1",
+  "theme_color": "#2b2f33",
+  "icons": [
+    { "src": "../whiteboard-icon.png", "type": "image/png", "purpose": "any" }
+  ]
+}
