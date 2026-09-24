@@ -1,11 +1,11 @@
-/* IEC GitHub Pages entry: foreground badging + Android notification trial v2.
+/* IEC GitHub Pages entry: foreground badging + Android notification trial v3.
  * Configure only the GAS /exec URL in config.js. Nothing private belongs here.
  */
 (function(){
   'use strict';
   const APP='iec-board-badge', PROTOCOL=1;
   const URL_KEY='iec.board.pwa.gasUrl.v1';
-  const VERSION='2026.09.24-r16-pwa2-android';
+  const VERSION='2026.09.24-r16-pwa3-android';
   const ENTRY=new URL('./',window.location.href);
   const NOTIFY_KEY='iec.board.pwa.notifications:'+ENTRY.pathname;
   const NOTIFY_TAG=APP+':'+ENTRY.pathname+':snapshot';
@@ -32,10 +32,13 @@
   }
   function isStandalone(){return !!((window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true);}
   function environment(){
-    const ios=/iPhone|iPad|iPod/i.test(navigator.userAgent||'')||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
-    const android=/Android/i.test(navigator.userAgent||'');
+    const android=/Android/i.test(navigator.userAgent||'') ||
+      /^Android$/i.test(String(navigator.userAgentData&&navigator.userAgentData.platform||''));
+    const ios=!android&&(/iPhone|iPad|iPod/i.test(navigator.userAgent||'')||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1));
     const direct=typeof navigator.setAppBadge==='function';
-    const mode=direct?'badge':android?'notification':'unsupported';
+    // Android may expose setAppBadge without updating the launcher icon.
+    // Always use opt-in visible notifications on Android, even when that API exists.
+    const mode=android?'notification':direct?'badge':'unsupported';
     let permission='unavailable';try{if('Notification' in window)permission=Notification.permission;}catch(e){}
     let reason='';
     if(!window.isSecureContext)reason='HTTPSで公開した入口を開いてください。';
