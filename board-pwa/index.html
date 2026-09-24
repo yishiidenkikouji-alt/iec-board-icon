@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#2b2f33">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="行き先ボード">
+<meta name="referrer" content="no-referrer">
+<title>行き先ホワイトボード</title>
+<link rel="icon" type="image/png" href="../whiteboard-icon.png">
+<link rel="apple-touch-icon" href="../whiteboard-icon.png">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="stylesheet" href="./styles.css">
+<script defer src="./config.js"></script>
+<script defer src="./app.js"></script>
+</head>
+<body>
+<header id="entryBar">
+  <span id="countLabel" role="status" aria-live="polite">件数を待っています</span>
+  <button type="button" id="settingsButton">バッジ設定</button>
+</header>
+<main id="boardArea">
+  <div id="startGuide">
+    <h1>行き先ホワイトボード</h1>
+    <p>GASのホワイトボードとホーム画面バッジをつなぐ入口です。</p>
+    <p id="startStatus">接続先を確認しています。</p>
+    <button type="button" id="connectButton">接続先設定</button>
+    <p>初回はSafariでこのページを開き、共有メニューから「ホーム画面に追加」。追加したアイコンから開いてください。</p>
+    <p class="small">従来のアイコンは、試験が済むまで残してください。</p>
+  </div>
+  <iframe id="boardFrame" title="行き先ホワイトボード" referrerpolicy="no-referrer" allow="geolocation *; camera *; clipboard-write *" hidden></iframe>
+</main>
+<div id="sheetBackdrop" hidden>
+  <section id="settingsSheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" tabindex="-1">
+    <header class="sheet-heading"><h2 id="sheetTitle">ホーム画面バッジ</h2><button type="button" id="closeSettings" aria-label="設定を閉じる">×</button></header>
+    <p id="environmentStatus"></p>
+    <div class="buttons"><button type="button" id="permissionButton">バッジを有効にする</button><button type="button" id="refreshButton">件数を更新</button></div>
+    <p id="actionStatus" role="status" aria-live="polite"></p>
+    <dl id="diagnostics">
+      <dt>入口版</dt><dd id="entryVersion">—</dd>
+      <dt>起動方法</dt><dd id="launchMode">—</dd>
+      <dt>通知許可</dt><dd id="permissionState">—</dd>
+      <dt>GAS連携</dt><dd id="bridgeState">—</dd>
+      <dt>本人の要対応</dt><dd id="actualCount">未取得</dd>
+      <dt>最終受信</dt><dd id="receivedAt">—</dd>
+      <dt>入口の準備</dt><dd id="workerState">確認中</dd>
+    </dl>
+    <details>
+      <summary>実機で数字を試す</summary>
+      <p>「試験で1を表示」は実件数とは別です。押した後にホーム画面へ戻り、新しいアイコンの「1」を確認してください。</p>
+      <div class="buttons"><button type="button" id="testButton">試験で「1」を表示</button><button type="button" id="endTestButton">試験を終了して実件数へ戻す</button></div>
+      <p class="small">試験中は実件数を受け取っても「1」を維持します。終了ボタンを押すと実件数に戻り、未取得なら試験数字を消します。</p>
+    </details>
+    <details id="connectionDetails">
+      <summary>接続先設定・読み込み直し</summary>
+      <form id="connectionForm">
+        <label for="gasUrl">現在使っているGASのウェブアプリURL（/exec）</label>
+        <input id="gasUrl" type="url" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off" spellcheck="false">
+        <p class="small">入力内容はこの端末だけに保存します。全員共通にする場合はconfig.jsで設定してください。公開範囲・権限を広げる必要はありません。</p>
+        <button type="submit">この端末の接続先を保存</button>
+      </form>
+      <div class="buttons"><button type="button" id="reloadBoardButton">GAS画面を読み込み直す</button><a id="directLink" target="_blank" rel="noopener noreferrer" hidden>従来のGAS画面を別に開く</a></div>
+      <p class="small">新しい入口では利用者の選択や端末登録を求められる場合があります。認証情報をGitHubへコピーしないでください。表示できない場合もGoogleの公開設定は変更せず、従来の入口を利用してください。</p>
+    </details>
+    <details>
+      <summary>今回の範囲・確認できないとき</summary>
+      <p>開いている間の更新だけを試す版です。閉じている間は、新しい件数を取得しません。プッシュ通知の送信処理は含まれていません。</p>
+      <p>iPhoneではiOS 16.4以降のホーム画面Webアプリと通知許可が必要です。通知が許可済みでも、端末の「設定 → 通知」でバッジだけオフにできるため、実際の数字はホーム画面で確認してください。</p>
+      <p>Androidなどはブラウザーとホームアプリによって対応が異なります。対応APIがない環境でアイコンの数字を出したと表示することはありません。</p>
+      <p>氏名・権限コード・トークン・文書内容は入口に送らず、件数と接続状態だけを受け取ります。GAS側の権限は変更しません。</p>
+    </details>
+  </section>
+</div>
+<noscript>この入口にはJavaScriptが必要です。設定を確認するか、従来のホワイトボードを使用してください。</noscript>
+</body>
+</html>
