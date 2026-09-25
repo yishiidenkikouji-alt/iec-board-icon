@@ -29,38 +29,3 @@ details { border-top:1px solid #d4dce5; padding:12px 0; } summary { cursor:point
 input { width:100%; min-height:44px; padding:8px; margin:7px 0; border:1px solid #aab9c9; border-radius:6px; font-size:16px; }
 label { display:block; }
 @media(max-width:420px) { #settingsSheet { padding:0 12px 12px; } h2 { font-size:18px; } #diagnostics { grid-template-columns:88px minmax(0,1fr); } }
-
-
-/* r30: GAS iframe connection recovery */
-#frameRecovery{
-  position:absolute;
-  inset:0;
-  z-index:20;
-  display:flex;
-  align-items:flex-start;
-  justify-content:center;
-  padding:28px 14px;
-  background:#eceff1;
-  overflow:auto;
-}
-#frameRecovery[hidden]{display:none!important;}
-.frame-recovery-card{
-  width:min(520px,100%);
-  margin-top:18px;
-  padding:20px;
-  border:1px solid #c8d2de;
-  border-radius:14px;
-  background:#fff;
-  color:#263445;
-  box-shadow:0 8px 24px #00000014;
-  line-height:1.6;
-}
-.frame-recovery-card strong{display:block;font-size:18px;margin-bottom:8px;}
-.frame-recovery-card p{margin:8px 0;}
-.frame-recovery-actions{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 10px;}
-.frame-recovery-actions button{flex:1 1 180px;}
-#frameRecoveryDirectLink{
-  display:inline-block;
-  margin-top:4px;
-  font-weight:700;
-}
