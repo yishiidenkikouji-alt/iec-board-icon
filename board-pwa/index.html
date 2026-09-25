@@ -33,6 +33,18 @@
     <p class="small">従来のアイコンは、試験が済むまで残してください。</p>
   </div>
   <iframe id="boardFrame" title="行き先ホワイトボード" referrerpolicy="no-referrer" allow="geolocation *; camera *; clipboard-write *" hidden></iframe>
+  <div id="frameRecovery" hidden role="status" aria-live="polite">
+    <div class="frame-recovery-card">
+      <strong>ホワイトボードを読み込めませんでした</strong>
+      <p id="frameRecoveryText">自動で再接続しましたが、GAS画面から応答がありません。</p>
+      <div class="frame-recovery-actions">
+        <button type="button" id="frameRecoveryRetry">もう一度読み込む</button>
+        <button type="button" id="frameRecoverySettings">接続先を確認</button>
+      </div>
+      <a id="frameRecoveryDirectLink" target="_blank" rel="noopener noreferrer">GAS画面を直接開く</a>
+      <p class="small">直接開ける場合は、Googleのログイン状態を確認してから行き先ボードへ戻り「もう一度読み込む」を押してください。</p>
+    </div>
+  </div>
 </main>
 <div id="sheetBackdrop" hidden>
   <section id="settingsSheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" tabindex="-1">
