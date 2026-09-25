@@ -5,7 +5,7 @@
   'use strict';
   const APP='iec-board-badge', PROTOCOL=1;
   const URL_KEY='iec.board.pwa.gasUrl.v1';
-  const VERSION='2026.09.25-r30-general-user-recovery';
+  const VERSION='2026.09.25-r31-slow-gas-startup';
   const ENTRY=new URL('./',window.location.href);
   const NOTIFY_KEY='iec.board.pwa.notifications:'+ENTRY.pathname;
   const NOTIFY_TAG=APP+':'+ENTRY.pathname+':snapshot';
@@ -111,19 +111,10 @@
     clearFrameRecoveryTimer();
     frameRecoveryTimer=setTimeout(function(){
       if(state.source||state.gasUrl!==url)return;
-      if(frameRecoveryRetry<1){
-        frameRecoveryRetry++;
-        setFrameRecovery(false);
-        notice('GAS画面を再接続しています。');
-        frame.src=url;
-        scheduleFrameRecovery(url);
-        render();
-        return;
-      }
-      setFrameRecovery(true,'自動で再接続しましたが、GAS画面から応答がありません。端末の接続先またはGoogleのログイン状態を確認してください。');
-      notice('GAS画面との接続を確認できません。');
+      setFrameRecovery(true,'読み込みに時間がかかっています。自動で再読込はしていません。しばらく待つか、必要な場合だけ「もう一度読み込む」を押してください。');
+      notice('GAS画面の読み込みに時間がかかっています。');
       render();
-    },7000);
+    },60000);
   }
   function stale(){return !!state.updatedAt&&Date.now()-state.updatedAt>7*60*1000;}
   function render(){
@@ -248,7 +239,7 @@
     if(!data||data.app!==APP||data.protocol!==PROTOCOL||typeof data.pageId!=='string'||!/^[a-f0-9]{32}$/.test(data.pageId))return;
     if(!validGoogleOrigin(event.origin)||!isChildOfBoard(event.source))return;
     if(data.type==='hello'){
-      clearFrameRecoveryTimer();frameRecoveryRetry=0;setFrameRecovery(false);
+      clearFrameRecoveryTimer();setFrameRecovery(false);
       if(state.source!==event.source||state.pageId!==data.pageId||state.origin!==event.origin){
         state.source=event.source;state.origin=event.origin;state.pageId=data.pageId;state.session=randomId();state.sequence=0;
         state.status='waiting';state.count=null;state.updatedAt=0;state.receivedAt=0;
