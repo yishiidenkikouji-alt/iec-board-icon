@@ -4,14 +4,15 @@
  */
 (function(){
   'use strict';
-  const APP='iec-settings-menu-v1', VERSION='2026.09.25-r28b';
+  const APP='iec-settings-menu-v1', VERSION='2026.09.26-header1';
   const ROOT=new URL('./',location.href),frame=document.getElementById('boardFrame');
   const button=document.getElementById('settingsButton');
   const boardArea=document.getElementById('boardArea');
   const backdrop=document.getElementById('sheetBackdrop');
+  const entryBar=document.getElementById('entryBar');
   if(!frame||!button||!boardArea||window.top!==window||location.origin!=='https://yishiidenkikouji-alt.github.io'||ROOT.pathname!=='/iec-board-icon/board-pwa/')return;
   const nativeOpen=button.onclick;
-  const state={nonce:'',page:'',source:null,origin:'',seq:0,pending:0,timer:null};
+  const state={nonce:'',page:'',source:null,origin:'',headerLayout:'',seq:0,pending:0,timer:null};
 
   function unlockBoardIfNativeSheetClosed(){
     /* A restored/BFCache page or an interrupted settings handoff must never
@@ -42,7 +43,8 @@
     }catch(e){return '';}
   }
   function reset(){
-    clearTimeout(state.timer);state.nonce=currentNonce();state.page='';state.source=null;state.origin='';state.pending=0;
+    clearTimeout(state.timer);state.nonce=currentNonce();state.page='';state.source=null;state.origin='';state.headerLayout='';state.pending=0;
+    if(entryBar)entryBar.hidden=false;
     button.disabled=false;button.textContent='⚙ 設定';button.title='通知・バッジ・接続先の設定';
     unlockBoardIfNativeSheetClosed();
   }
@@ -62,9 +64,15 @@
       if(state.source&&(state.source!==event.source||state.origin!==event.origin))return;
       if(state.page!==data.page){clearTimeout(state.timer);state.pending=0;button.disabled=false;}
       state.source=event.source;state.origin=event.origin;state.page=data.page;
+      state.headerLayout=data.headerLayout==='compact-v1'?'compact-v1':'';
+      if(entryBar)entryBar.hidden=false;
       button.title='この端末の利用者・通知・バッジ設定';
       unlockBoardIfNativeSheetClosed();
-      send('ready-ack',{version:VERSION});return;
+      send('ready-ack',{version:VERSION,headerLayout:state.headerLayout});return;
+    }
+    if(data.type==='header-ready'){
+      if(event.source===state.source&&event.origin===state.origin&&data.page===state.page&&state.headerLayout==='compact-v1'&&data.headerLayout==='compact-v1'&&entryBar)entryBar.hidden=true;
+      return;
     }
     if(event.source!==state.source||event.origin!==state.origin||data.page!==state.page||data.type!=='open-result'||data.request!==state.pending||!state.pending)return;
     clearTimeout(state.timer);state.pending=0;button.disabled=false;button.textContent='⚙ 設定';
