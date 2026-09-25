@@ -14,6 +14,7 @@
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="stylesheet" href="./styles.css">
 <script defer src="./config.js"></script>
+<script defer src="./entry-session.js"></script>
 <script defer src="./app.js"></script>
 </head>
 <body>
@@ -42,6 +43,7 @@
     <p id="actionStatus" role="status" aria-live="polite"></p>
     <dl id="diagnostics">
       <dt>入口版</dt><dd id="entryVersion">—</dd>
+      <dt>端末保持版</dt><dd id="entrySessionVersion">2026.09.25-r22</dd>
       <dt>起動方法</dt><dd id="launchMode">—</dd>
       <dt>通知許可</dt><dd id="permissionState">—</dd>
       <dt>GAS連携</dt><dd id="bridgeState">—</dd>
@@ -49,6 +51,7 @@
       <dt>最終受信</dt><dd id="receivedAt">—</dd>
       <dt>入口の準備</dt><dd id="workerState">確認中</dd>
     </dl>
+    <p id="entrySessionStatus" class="small" role="status">端末の保存連携を確認中…</p>
     <details>
       <summary id="testSummary">実機で数字を試す</summary>
       <p id="testHelp">「試験で1を表示」は実件数とは別です。押した後にホーム画面へ戻り、新しいアイコンの「1」を確認してください。</p>
@@ -71,7 +74,7 @@
       <p>開いている間の更新だけを試す版です。閉じている間は、新しい件数を取得しません。プッシュ通知の送信処理は含まれていません。</p>
       <p>iPhoneではiOS 16.4以降のホーム画面Webアプリと通知許可が必要です。通知が許可済みでも、端末の「設定 → 通知」でバッジだけオフにできるため、実際の数字はホーム画面で確認してください。</p>
       <p>Androidで数字バッジAPIがない場合は、通知を使います。通知本文には件数を表示しますが、アイコンの点・数字は端末とホームアプリに依存し、要対応件数と同じ数字になるとは限りません。</p>
-      <p>氏名・権限コード・トークン・文書内容は入口に送らず、件数と接続状態だけを受け取ります。GAS側の権限は変更しません。</p>
+      <p>氏名・管理者追加コード・文書内容は入口へ送りません。再起動時の本人確認に使う署名付き復元キーは、この端末内だけに保存します。GitHubの公開ファイルへ認証情報を入力しないでください。GASは復元のたびに登録・権限を確認します。</p>
     </details>
   </section>
 </div>
