@@ -5,7 +5,7 @@
   'use strict';
   const APP='iec-board-badge', PROTOCOL=1;
   const URL_KEY='iec.board.pwa.gasUrl.v1';
-  const VERSION='2026.09.25-r29-android-settings-recovery';
+  const VERSION='2026.09.25-r30-general-user-recovery';
   const ENTRY=new URL('./',window.location.href);
   const NOTIFY_KEY='iec.board.pwa.notifications:'+ENTRY.pathname;
   const NOTIFY_TAG=APP+':'+ENTRY.pathname+':snapshot';
@@ -18,6 +18,7 @@
     badgeRevision:0,lastApplied:null,loadStarted:0,notifyEnabled:false,notifyLast:null
   };
   let lastFocus=null, closeReloadTimer=null;
+  let frameRecoveryTimer=null, frameRecoveryRetry=0, frameRecoveryVisible=false;
   function randomId(){
     return Array.from(crypto.getRandomValues(new Uint32Array(4)),n=>n.toString(16).padStart(8,'0')).join('');
   }
@@ -96,6 +97,34 @@
     }catch(e){notice('件数通知は停止しました。表示済みの通知は通知欄から消してください。');}
   }
   function notice(text){state.notice=String(text||'');el('actionStatus').textContent=state.notice;}
+  function clearFrameRecoveryTimer(){
+    clearTimeout(frameRecoveryTimer);frameRecoveryTimer=null;
+  }
+  function setFrameRecovery(visible,message){
+    frameRecoveryVisible=!!visible;
+    const box=el('frameRecovery'),text=el('frameRecoveryText'),direct=el('frameRecoveryDirectLink');
+    if(text&&message)text.textContent=message;
+    if(direct&&state.gasUrl)direct.href=state.gasUrl;
+    if(box)box.hidden=!visible;
+  }
+  function scheduleFrameRecovery(url){
+    clearFrameRecoveryTimer();
+    frameRecoveryTimer=setTimeout(function(){
+      if(state.source||state.gasUrl!==url)return;
+      if(frameRecoveryRetry<1){
+        frameRecoveryRetry++;
+        setFrameRecovery(false);
+        notice('GAS画面を再接続しています。');
+        frame.src=url;
+        scheduleFrameRecovery(url);
+        render();
+        return;
+      }
+      setFrameRecovery(true,'自動で再接続しましたが、GAS画面から応答がありません。端末の接続先またはGoogleのログイン状態を確認してください。');
+      notice('GAS画面との接続を確認できません。');
+      render();
+    },7000);
+  }
   function stale(){return !!state.updatedAt&&Date.now()-state.updatedAt>7*60*1000;}
   function render(){
     const env=environment(), ready=state.status==='ready'&&!stale();
@@ -130,7 +159,8 @@
     el('endTestButton').disabled=!state.testing;
     el('reloadBoardButton').disabled=!state.gasUrl;
     let label;
-    if(state.testing)label=notificationMode?'試験中：通知1件（数字バッジではありません）':'試験中：アイコンに「1」';
+    if(frameRecoveryVisible)label='ホワイトボードを再接続してください';
+    else if(state.testing)label=notificationMode?'試験中：通知1件（数字バッジではありません）':'試験中：アイコンに「1」';
     else if(ready)label='本人の要対応：'+state.count+'件';
     else if(state.status==='no-user'||state.status==='reset')label='利用者・件数を確認中';
     else if(state.count!==null)label='要対応：'+state.count+'件（再確認待ち）';
@@ -218,6 +248,7 @@
     if(!data||data.app!==APP||data.protocol!==PROTOCOL||typeof data.pageId!=='string'||!/^[a-f0-9]{32}$/.test(data.pageId))return;
     if(!validGoogleOrigin(event.origin)||!isChildOfBoard(event.source))return;
     if(data.type==='hello'){
+      clearFrameRecoveryTimer();frameRecoveryRetry=0;setFrameRecovery(false);
       if(state.source!==event.source||state.pageId!==data.pageId||state.origin!==event.origin){
         state.source=event.source;state.origin=event.origin;state.pageId=data.pageId;state.session=randomId();state.sequence=0;
         state.status='waiting';state.count=null;state.updatedAt=0;state.receivedAt=0;
@@ -261,9 +292,10 @@
     else notice(env.mode==='notification'?'通知許可を確認しました。「実機で通知を試す」→「テスト通知を1件表示」で確認してください。GAS接続後は取得した件数を通知本文に表示します。':'通知許可を確認しました。まだ実件数を取得できていません。「件数を更新」または「試験で1を表示」で確認してください。');
   }
   function configureFrame(url){
+    clearFrameRecoveryTimer();frameRecoveryRetry=0;setFrameRecovery(false);
     state.gasUrl=url;state.source=null;state.origin='';state.pageId='';state.session='';state.sequence=0;
     state.count=null;state.status='waiting';state.updatedAt=0;state.receivedAt=0;state.loadStarted=Date.now();
-    frame.hidden=false;el('startGuide').hidden=true;frame.src=url;
+    frame.hidden=false;el('startGuide').hidden=true;frame.src=url;scheduleFrameRecovery(url);
     el('gasUrl').value=url;el('directLink').href=url;el('directLink').hidden=false;render();
     clearTimeout(closeReloadTimer);
     closeReloadTimer=setTimeout(()=>{
@@ -279,6 +311,8 @@
   }
   el('settingsButton').onclick=()=>openSettings(false);
   el('connectButton').onclick=()=>openSettings(true);
+  if(el('frameRecoveryRetry'))el('frameRecoveryRetry').onclick=()=>{if(state.gasUrl)configureFrame(state.gasUrl);};
+  if(el('frameRecoverySettings'))el('frameRecoverySettings').onclick=()=>openSettings(true);
   el('closeSettings').onclick=closeSettings;
   if(el('androidBackToBoardBtn'))el('androidBackToBoardBtn').onclick=closeSettings;
   el('sheetBackdrop').onclick=event=>{if(event.target===el('sheetBackdrop'))closeSettings();};
