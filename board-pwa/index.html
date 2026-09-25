@@ -16,11 +16,12 @@
 <script defer src="./config.js"></script>
 <script defer src="./entry-session.js"></script>
 <script defer src="./app.js"></script>
+<script defer src="./settings-menu.js"></script>
 </head>
 <body>
 <header id="entryBar">
   <span id="countLabel" role="status" aria-live="polite">件数を待っています</span>
-  <button type="button" id="settingsButton">バッジ設定</button>
+  <button type="button" id="settingsButton">⚙ 設定</button>
 </header>
 <main id="boardArea">
   <div id="startGuide">
@@ -43,6 +44,7 @@
     <p id="actionStatus" role="status" aria-live="polite"></p>
     <dl id="diagnostics">
       <dt>入口版</dt><dd id="entryVersion">—</dd>
+      <dt>設定画面版</dt><dd id="settingsMenuVersion">2026.09.25-r28</dd>
       <dt>端末保持版</dt><dd id="entrySessionVersion">2026.09.25-r22</dd>
       <dt>起動方法</dt><dd id="launchMode">—</dd>
       <dt>通知許可</dt><dd id="permissionState">—</dd>
