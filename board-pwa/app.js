@@ -5,7 +5,7 @@
   'use strict';
   const APP='iec-board-badge', PROTOCOL=1;
   const URL_KEY='iec.board.pwa.gasUrl.v1';
-  const VERSION='2026.09.24-r16-pwa3-android';
+  const VERSION='2026.09.25-r29-android-settings-recovery';
   const ENTRY=new URL('./',window.location.href);
   const NOTIFY_KEY='iec.board.pwa.notifications:'+ENTRY.pathname;
   const NOTIFY_TAG=APP+':'+ENTRY.pathname+':snapshot';
@@ -137,15 +137,28 @@
     else label=state.gasUrl?'本人の件数を待っています':'接続先を設定してください';
     el('countLabel').textContent=label;
   }
+  function unlockBoard(){
+    const board=el('boardArea');
+    if(!board)return;
+    try{board.inert=false;}catch(e){}
+    board.removeAttribute('inert');
+    board.removeAttribute('aria-hidden');
+    board.style.pointerEvents='auto';
+  }
   function openSettings(focusConnection){
     if(el('sheetBackdrop').hidden)lastFocus=document.activeElement;
     el('sheetBackdrop').hidden=false;
-    el('boardArea').inert=true;
+    const env=environment();
+    if(env.android)unlockBoard();
+    else el('boardArea').inert=true;
+    const androidBack=el('androidBackToBoardBtn');
+    if(androidBack)androidBack.hidden=!env.android;
     if(focusConnection)el('connectionDetails').open=true;
     render();el('settingsSheet').focus();
   }
   function closeSettings(){
-    el('sheetBackdrop').hidden=true;el('boardArea').inert=false;
+    el('sheetBackdrop').hidden=true;
+    unlockBoard();
     if(lastFocus&&lastFocus.isConnected)lastFocus.focus();
   }
   function validGoogleOrigin(origin){
@@ -259,6 +272,7 @@
   }
   function resume(){
     if(document.hidden)return;
+    if(environment().android)unlockBoard();
     if(state.source)send('refresh');
     render();
     if(state.testing)queueBadge(1);
@@ -266,6 +280,7 @@
   el('settingsButton').onclick=()=>openSettings(false);
   el('connectButton').onclick=()=>openSettings(true);
   el('closeSettings').onclick=closeSettings;
+  if(el('androidBackToBoardBtn'))el('androidBackToBoardBtn').onclick=closeSettings;
   el('sheetBackdrop').onclick=event=>{if(event.target===el('sheetBackdrop'))closeSettings();};
   document.addEventListener('keydown',event=>{
     if(el('sheetBackdrop').hidden)return;
