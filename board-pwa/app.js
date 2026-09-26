@@ -263,7 +263,8 @@
     render();
     if(state.testing)queueBadge(1);
   }
-  el('settingsButton').onclick=()=>openSettings(false);
+  // 連携スクリプトの準備前も、旧バッジ設定を自動で開かない。
+  el('settingsButton').onclick=function(){this.textContent='設定を読み込み中…';this.title='ホワイトボードの表示後に、もう一度押してください。';};
   el('connectButton').onclick=()=>openSettings(true);
   el('closeSettings').onclick=closeSettings;
   el('sheetBackdrop').onclick=event=>{if(event.target===el('sheetBackdrop'))closeSettings();};
@@ -315,3 +316,4 @@
   else {el('startStatus').textContent='接続先の /exec URLを「接続先設定」で登録してください。バッジ単独の実機試験は、接続前でも実行できます。';render();}
   void registerWorker();
 })();
+

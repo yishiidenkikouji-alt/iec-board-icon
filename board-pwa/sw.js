@@ -5,7 +5,7 @@
 'use strict';
 const ROOT=new URL('./',self.location.href);
 const PREFIX='iec-board-pwa-shell:'+ROOT.pathname+':';
-const CACHE=PREFIX+'v33-r28b-interaction-unlock';
+const CACHE=PREFIX+'v34-r66-settings-wait';
 const FILES=['./','./index.html','./styles.css','./config.js','./entry-session.js','./app.js','./settings-menu.js','./manifest.webmanifest'];
 const PUBLIC_URLS=FILES.map(path=>new URL(path,ROOT).href);
 self.addEventListener('install',event=>{
@@ -44,3 +44,4 @@ self.addEventListener('notificationclick',event=>{
     return self.clients.openWindow(ROOT.href);
   })());
 });
+

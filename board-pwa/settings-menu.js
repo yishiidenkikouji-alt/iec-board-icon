@@ -4,14 +4,13 @@
  */
 (function(){
   'use strict';
-  const APP='iec-settings-menu-v1', VERSION='2026.09.26-header1';
+  const APP='iec-settings-menu-v1', VERSION='2026.09.26-settings-wait2';
   const ROOT=new URL('./',location.href),frame=document.getElementById('boardFrame');
   const button=document.getElementById('settingsButton');
   const boardArea=document.getElementById('boardArea');
   const backdrop=document.getElementById('sheetBackdrop');
   const entryBar=document.getElementById('entryBar');
   if(!frame||!button||!boardArea||window.top!==window||location.origin!=='https://yishiidenkikouji-alt.github.io'||ROOT.pathname!=='/iec-board-icon/board-pwa/')return;
-  const nativeOpen=button.onclick;
   const state={nonce:'',page:'',source:null,origin:'',headerLayout:'',seq:0,pending:0,timer:null};
 
   function unlockBoardIfNativeSheetClosed(){
@@ -23,16 +22,21 @@
     }
   }
   function finishUnifiedOpen(){
+    clearWaiting();
     /* The unified top Settings lives inside GAS. Make sure the old native
        badge sheet is not invisibly holding the iframe in an inert state. */
     if(backdrop && !backdrop.hidden)backdrop.hidden=true;
     try{boardArea.inert=false;}catch(e){}
     boardArea.removeAttribute('inert');
   }
-  function nativeSettings(){
-    unlockBoardIfNativeSheetClosed();
-    button.disabled=false;button.textContent='⚙ 設定';
-    if(typeof nativeOpen==='function')nativeOpen.call(button);
+  function clearWaiting(){
+    const note=document.getElementById('settingsWaitingNotice');if(note)note.hidden=true;
+  }
+  function waiting(message){
+    unlockBoardIfNativeSheetClosed();button.disabled=false;button.textContent='⚙ 設定';
+    let note=document.getElementById('settingsWaitingNotice');
+    if(!note){note=document.createElement('p');note.id='settingsWaitingNotice';note.setAttribute('role','status');note.style.cssText='margin:0;padding:10px 14px;background:#fff8e8;color:#594319;font:14px/1.5 system-ui,sans-serif;';entryBar.insertAdjacentElement('afterend',note);}
+    note.textContent=message||'設定を読み込み中です。ホワイトボードの表示後に、もう一度「設定」を押してください。';note.hidden=false;
   }
   function currentNonce(){
     try{
@@ -43,6 +47,7 @@
     }catch(e){return '';}
   }
   function reset(){
+    clearWaiting();
     clearTimeout(state.timer);state.nonce=currentNonce();state.page='';state.source=null;state.origin='';state.headerLayout='';state.pending=0;
     if(entryBar)entryBar.hidden=false;
     button.disabled=false;button.textContent='⚙ 設定';button.title='通知・バッジ・接続先の設定';
@@ -61,6 +66,7 @@
     if(!data||data.app!==APP||!nonce||data.nonce!==nonce||!/^[a-f0-9]{32}$/.test(String(data.page||''))||!allowed(event.origin)||!belongs(event.source))return;
     if(state.nonce!==nonce)reset();
     if(data.type==='ready'){
+      clearWaiting();
       if(state.source&&(state.source!==event.source||state.origin!==event.origin))return;
       if(state.page!==data.page){clearTimeout(state.timer);state.pending=0;button.disabled=false;}
       state.source=event.source;state.origin=event.origin;state.page=data.page;
@@ -83,16 +89,16 @@
       button.title='利用者を確認中です。読み込みが終わってから設定を開いてください。';
       button.textContent='確認中…';const seq=state.seq;
       setTimeout(function(){if(state.seq===seq&&!state.pending)button.textContent='⚙ 設定';},1500);
-    }else if(data.status==='error')nativeSettings();
+    }else if(data.status==='error')waiting('設定を開けませんでした。ホワイトボードを読み込み直して、もう一度お試しください。');
   });
   button.onclick=function(){
     unlockBoardIfNativeSheetClosed();
     if(state.pending)return;
     if(currentNonce()!==state.nonce)reset();
-    if(!state.source){nativeSettings();return;}
+    if(!state.source){waiting();return;}
     state.pending=++state.seq;const request=state.pending;
     button.disabled=true;
-    state.timer=setTimeout(function(){if(state.pending===request){state.pending=0;nativeSettings();}},3000);
+    state.timer=setTimeout(function(){if(state.pending===request){state.pending=0;waiting('設定の応答を待っています。少し待って、もう一度「設定」を押してください。');}},3000);
     send('open',{request:request});
   };
   new MutationObserver(function(){
