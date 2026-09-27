@@ -5,7 +5,7 @@
 'use strict';
 const ROOT=new URL('./',self.location.href);
 const PREFIX='iec-board-pwa-shell:'+ROOT.pathname+':';
-const CACHE=PREFIX+'v34-r66-settings-wait';
+const CACHE=PREFIX+'v35-r90-fast-start';
 const FILES=['./','./index.html','./styles.css','./config.js','./entry-session.js','./app.js','./settings-menu.js','./manifest.webmanifest'];
 const PUBLIC_URLS=FILES.map(path=>new URL(path,ROOT).href);
 self.addEventListener('install',event=>{
@@ -21,12 +21,17 @@ self.addEventListener('fetch',event=>{
   const plain=new URL(url.pathname,ROOT.origin).href;
   if(!PUBLIC_URLS.includes(plain))return;
   const request=new Request(plain,{cache:'no-cache',credentials:'same-origin'});
-  event.respondWith(fetch(request).then(response=>{
-    if(response.ok && response.type!=='opaque'){
-      const copy=response.clone();event.waitUntil(caches.open(CACHE).then(cache=>cache.put(plain,copy)));
+  // Return the cached public shell immediately; refresh it without blocking startup.
+  const update=fetch(request).then(async response=>{
+    if(response.ok&&response.type!=='opaque'){
+      try{const cache=await caches.open(CACHE);await cache.put(plain,response.clone());}catch(error){/* Storage failure must not block a live response. */}
     }
     return response;
-  }).catch(()=>caches.match(plain).then(saved=>saved||Response.error())));
+  });
+  event.waitUntil(update.then(()=>undefined,()=>undefined));
+  event.respondWith(caches.open(CACHE).then(cache=>cache.match(plain)).catch(()=>null).then(saved=>{
+    return saved||update.catch(()=>Response.error());
+  }));
 });
 
 // Only handle this entry's visible snapshot notifications. No push subscription.
@@ -44,4 +49,5 @@ self.addEventListener('notificationclick',event=>{
     return self.clients.openWindow(ROOT.href);
   })());
 });
+
 
