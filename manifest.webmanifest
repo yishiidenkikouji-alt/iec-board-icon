@@ -1,7 +1,7 @@
 {
   "id": "./",
-  "name": "行き先ホワイトボード",
-  "short_name": "行き先ボード",
+  "name": "業務アプリ",
+  "short_name": "業務アプリ",
   "lang": "ja",
   "start_url": "./?installed=1",
   "scope": "./",
@@ -9,6 +9,6 @@
   "background_color": "#eceff1",
   "theme_color": "#2b2f33",
   "icons": [
-    { "src": "../whiteboard-icon.png", "type": "image/png", "purpose": "any" }
+    { "src": "./business-app-icon.png", "type": "image/png", "purpose": "any" }
   ]
 }

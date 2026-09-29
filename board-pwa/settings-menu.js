@@ -36,7 +36,7 @@
     unlockBoardIfNativeSheetClosed();button.disabled=false;button.textContent='⚙ 設定';
     let note=document.getElementById('settingsWaitingNotice');
     if(!note){note=document.createElement('p');note.id='settingsWaitingNotice';note.setAttribute('role','status');note.style.cssText='margin:0;padding:10px 14px;background:#fff8e8;color:#594319;font:14px/1.5 system-ui,sans-serif;';entryBar.insertAdjacentElement('afterend',note);}
-    note.textContent=message||'設定を読み込み中です。ホワイトボードの表示後に、もう一度「設定」を押してください。';note.hidden=false;
+    note.textContent=message||'設定を読み込み中です。業務アプリの表示後に、もう一度「設定」を押してください。';note.hidden=false;
   }
   function currentNonce(){
     try{
@@ -89,7 +89,7 @@
       button.title='利用者を確認中です。読み込みが終わってから設定を開いてください。';
       button.textContent='確認中…';const seq=state.seq;
       setTimeout(function(){if(state.seq===seq&&!state.pending)button.textContent='⚙ 設定';},1500);
-    }else if(data.status==='error')waiting('設定を開けませんでした。ホワイトボードを読み込み直して、もう一度お試しください。');
+    }else if(data.status==='error')waiting('設定を開けませんでした。業務アプリを読み込み直して、もう一度お試しください。');
   });
   button.onclick=function(){
     unlockBoardIfNativeSheetClosed();

@@ -73,9 +73,9 @@
     }
     // One snapshot notification only. Do not re-post unchanged counts after dismissal.
     if(state.notifyLast===key)return;
-    await registration.showNotification(testing?'行き先ボード：通知テスト':'行き先ホワイトボード',{
+    await registration.showNotification(testing?'業務アプリ：通知テスト':'業務アプリ',{
       body:testing?'通知の試験です（1件）。ホーム画面の通知ドットを確認してください。':'本人の要対応：'+count+'件（取得時点）。最新の内容はボードで確認してください。',
-      tag:NOTIFY_TAG,icon:new URL('../whiteboard-icon.png',ENTRY).href,
+      tag:NOTIFY_TAG,icon:new URL('../business-app-icon.png',ENTRY).href,
       lang:'ja',silent:true,renotify:false,
       timestamp:testing?Date.now():(state.updatedAt||Date.now())
     });
@@ -231,7 +231,7 @@
     if(state.permissionBusy)return;
     const env=environment();
     if(!env.supported){notice(env.reason);render();return;}
-    if(env.needsPermission&&env.permission==='denied'){notice(env.mode==='notification'?'Chromeで入口を開き、サイトの権限 → 通知を確認してください。Android本体の設定 → アプリ → Chrome（または行き先ボード）→ 通知も確認してください。拒否済みの設定はこのボタンでは変更できません。':'端末の「設定 → 通知」で、この新しい入口の通知とバッジを許可してください。拒否済みの設定はこのボタンでは変更できません。');return;}
+    if(env.needsPermission&&env.permission==='denied'){notice(env.mode==='notification'?'Chromeで入口を開き、サイトの権限 → 通知を確認してください。Android本体の設定 → アプリ → Chrome（または業務アプリ）→ 通知も確認してください。拒否済みの設定はこのボタンでは変更できません。':'端末の「設定 → 通知」で、この新しい入口の通知とバッジを許可してください。拒否済みの設定はこのボタンでは変更できません。');return;}
     if(env.needsPermission&&env.permission!=='granted'){
       state.permissionBusy=true;render();let timer;
       try{
@@ -264,7 +264,7 @@
     if(state.testing)queueBadge(1);
   }
   // 連携スクリプトの準備前も、旧バッジ設定を自動で開かない。
-  el('settingsButton').onclick=function(){this.textContent='設定を読み込み中…';this.title='ホワイトボードの表示後に、もう一度押してください。';};
+  el('settingsButton').onclick=function(){this.textContent='設定を読み込み中…';this.title='業務アプリの表示後に、もう一度押してください。';};
   el('connectButton').onclick=()=>openSettings(true);
   el('closeSettings').onclick=closeSettings;
   el('sheetBackdrop').onclick=event=>{if(event.target===el('sheetBackdrop'))closeSettings();};

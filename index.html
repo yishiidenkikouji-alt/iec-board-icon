@@ -6,11 +6,11 @@
 <meta name="theme-color" content="#2b2f33">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="行き先ボード">
+<meta name="apple-mobile-web-app-title" content="業務アプリ">
 <meta name="referrer" content="no-referrer">
-<title>行き先ホワイトボード</title>
-<link rel="icon" type="image/png" href="../whiteboard-icon.png">
-<link rel="apple-touch-icon" href="../whiteboard-icon.png">
+<title>業務アプリ</title>
+<link rel="icon" type="image/png" href="./business-app-icon.png">
+<link rel="apple-touch-icon" href="./business-app-icon.png">
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="stylesheet" href="./styles.css">
 <script defer src="./config.js"></script>
@@ -23,14 +23,14 @@
 </header>
 <main id="boardArea">
   <div id="startGuide">
-    <h1>行き先ホワイトボード</h1>
-    <p>GASのホワイトボードとホーム画面バッジをつなぐ入口です。</p>
+    <h1>業務アプリ</h1>
+    <p>GASの業務アプリとホーム画面バッジをつなぐ入口です。</p>
     <p id="startStatus">接続先を確認しています。</p>
     <button type="button" id="connectButton">接続先設定</button>
     <p>初回はSafariでこのページを開き、共有メニューから「ホーム画面に追加」。追加したアイコンから開いてください。</p>
     <p class="small">従来のアイコンは、試験が済むまで残してください。</p>
   </div>
-  <iframe id="boardFrame" title="行き先ホワイトボード" referrerpolicy="no-referrer" allow="geolocation *; camera *; clipboard-write *" hidden></iframe>
+  <iframe id="boardFrame" title="業務アプリ" referrerpolicy="no-referrer" allow="geolocation *; camera *; clipboard-write *" hidden></iframe>
 </main>
 <div id="sheetBackdrop" hidden>
   <section id="settingsSheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" tabindex="-1">
@@ -73,6 +73,6 @@
     </details>
   </section>
 </div>
-<noscript>この入口にはJavaScriptが必要です。設定を確認するか、従来のホワイトボードを使用してください。</noscript>
+<noscript>この入口にはJavaScriptが必要です。設定を確認するか、従来の業務アプリを使用してください。</noscript>
 </body>
 </html>
