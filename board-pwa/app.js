@@ -5,7 +5,7 @@
   'use strict';
   const APP='iec-board-badge', PROTOCOL=1;
   const URL_KEY='iec.board.pwa.gasUrl.v1';
-  const VERSION='2026.09.24-r16-pwa3-android';
+  const VERSION='2026.09.30-r139-push';
   const ENTRY=new URL('./',window.location.href);
   const NOTIFY_KEY='iec.board.pwa.notifications:'+ENTRY.pathname;
   const NOTIFY_TAG=APP+':'+ENTRY.pathname+':snapshot';
@@ -18,6 +18,17 @@
     badgeRevision:0,lastApplied:null,loadStarted:0,notifyEnabled:false,notifyLast:null
   };
   let lastFocus=null, closeReloadTimer=null;
+  const pushPending139=new Map();
+  window.IecPushTransport139={
+    connected:()=>!!state.source,
+    request:function(action,payload){return new Promise(function(resolve,reject){
+      if(!state.source){reject(new Error('業務アプリとの接続を待ってから設定を開いてください。'));return;}
+      const requestId=randomId(),timer=setTimeout(()=>{pushPending139.delete(requestId);reject(new Error('通知設定の応答を確認できませんでした。設定を開き直して確認してください。'));},45000);
+      pushPending139.set(requestId,{resolve:resolve,reject:reject,timer:timer});send('push-request139',{requestId:requestId,action:action,payload:payload||{}});
+    })},
+    usePush:async function(enabled){if(enabled&&environment().android&&state.notifyEnabled)await stopNotifications();},
+    refresh:()=>send('refresh')
+  };
   function randomId(){
     return Array.from(crypto.getRandomValues(new Uint32Array(4)),n=>n.toString(16).padStart(8,'0')).join('');
   }
@@ -142,7 +153,7 @@
     el('sheetBackdrop').hidden=false;
     el('boardArea').inert=true;
     if(focusConnection)el('connectionDetails').open=true;
-    render();el('settingsSheet').focus();
+    render();el('settingsSheet').focus();window.dispatchEvent(new Event('iec-push-settings139'));
   }
   function closeSettings(){
     el('sheetBackdrop').hidden=true;el('boardArea').inert=false;
@@ -164,9 +175,9 @@
     }catch(e){}
     return false;
   }
-  function send(type){
+  function send(type,body){
     if(!state.source)return;
-    state.source.postMessage({app:APP,protocol:PROTOCOL,type:type,pageId:state.pageId,session:state.session},state.origin);
+    state.source.postMessage(Object.assign({app:APP,protocol:PROTOCOL,type:type,pageId:state.pageId,session:state.session},body||{}),state.origin);
   }
   function queueBadge(count){
     if(!Number.isSafeInteger(count)||count<0||count>999999)return;
@@ -206,12 +217,14 @@
     if(!validGoogleOrigin(event.origin)||!isChildOfBoard(event.source))return;
     if(data.type==='hello'){
       if(state.source!==event.source||state.pageId!==data.pageId||state.origin!==event.origin){
+        pushPending139.forEach(task=>{clearTimeout(task.timer);task.reject(new Error('接続が更新されました。通知設定を開き直してください。'));});pushPending139.clear();
         state.source=event.source;state.origin=event.origin;state.pageId=data.pageId;state.session=randomId();state.sequence=0;
         state.status='waiting';state.count=null;state.updatedAt=0;state.receivedAt=0;
       }
       send('welcome');render();return;
     }
     if(event.source!==state.source||event.origin!==state.origin||data.session!==state.session||data.pageId!==state.pageId)return;
+    if(data.type==='push-result139'){const task=pushPending139.get(data.requestId);if(task){pushPending139.delete(data.requestId);clearTimeout(task.timer);data.ok?task.resolve(data.result):task.reject(new Error(String(data.error||'通知設定を確認できませんでした。')));}return;}
     if(data.type==='open-settings'){openSettings(false);return;}
     if(data.type!=='state'||!Number.isSafeInteger(data.sequence)||data.sequence<=state.sequence)return;
     if(!['waiting','ready','unavailable','reset','no-user'].includes(data.status))return;
@@ -222,8 +235,10 @@
     if(data.status==='reset'||data.status==='no-user'){
       state.count=null;state.updatedAt=0;state.receivedAt=0;state.testing=false;
       queueBadge(0); // Do not leave a former user's badge after a user change.
+      window.dispatchEvent(new Event('iec-push-reset139'));
     }else if(data.status==='ready'){
       state.count=data.count;state.updatedAt=data.updatedAt;state.receivedAt=Date.now();applyActual();
+      window.dispatchEvent(new Event('iec-push-ready139'));
     }
     render();
   });

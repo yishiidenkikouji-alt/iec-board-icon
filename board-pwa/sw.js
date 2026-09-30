@@ -1,12 +1,12 @@
 /* Offline cache is limited to these public shell files. Never cache GAS, data,
  * identities, tokens, URLs saved by the user, or responses from other origins.
- * No push or background refresh is implemented in this foreground-only trial.
+ * Notification state is isolated in IndexedDB; payloads contain counts only.
  */
 'use strict';
 const ROOT=new URL('./',self.location.href);
 const PREFIX='iec-board-pwa-shell:'+ROOT.pathname+':';
-const CACHE=PREFIX+'v36-r109-brand';
-const FILES=['./','./index.html','./styles.css','./config.js','./entry-session.js','./app.js','./settings-menu.js','./manifest.webmanifest'];
+const CACHE=PREFIX+'v37-r139-push';
+const FILES=['./','./index.html','./styles.css','./config.js','./entry-session.js','./app.js','./push139.js','./settings-menu.js','./manifest.webmanifest'];
 const PUBLIC_URLS=FILES.map(path=>new URL(path,ROOT).href);
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(PUBLIC_URLS)).then(()=>self.skipWaiting()));
@@ -34,16 +34,16 @@ self.addEventListener('fetch',event=>{
   }));
 });
 
-// Only handle this entry's visible snapshot notifications. No push subscription.
+// Focus only this entry for its foreground or push notifications.
 self.addEventListener('notificationclick',event=>{
-  if(event.notification.tag!=='iec-board-badge:'+ROOT.pathname+':snapshot')return;
+  if(event.notification.tag!=='iec-board-badge:'+ROOT.pathname+':snapshot'&&!(event.notification.data&&event.notification.data.push139))return;
   event.notification.close();
   event.waitUntil((async()=>{
     const windows=await self.clients.matchAll({type:'window',includeUncontrolled:true});
     for(const client of windows){
       const url=new URL(client.url);
       if(url.origin===ROOT.origin&&(url.pathname===ROOT.pathname||url.pathname===ROOT.pathname+'index.html')){
-        try{return await client.focus();}catch(e){}
+        try{client.postMessage({type:'push-open139'});return await client.focus();}catch(e){}
       }
     }
     return self.clients.openWindow(ROOT.href);
@@ -51,3 +51,41 @@ self.addEventListener('notificationclick',event=>{
 });
 
 
+
+/* Encrypted Web Push delivery. Store only a random channel and aggregate counts,
+ * separately from the public shell cache. Always show a visible notification. */
+function pushDb139_(){return new Promise((resolve,reject)=>{const request=indexedDB.open('iec-push139',1);request.onupgradeneeded=()=>request.result.createObjectStore('state');request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);});}
+async function pushState139_(next){
+ const db=await pushDb139_();try{return await new Promise((resolve,reject)=>{
+  const tx=db.transaction('state',next===undefined?'readonly':'readwrite'),store=tx.objectStore('state');let value=null;
+  if(next===undefined){const request=store.get(ROOT.pathname);request.onsuccess=()=>{value=request.result||null;};}else store.put(next,ROOT.pathname);
+  tx.oncomplete=()=>resolve(next===undefined?value:next);tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||new Error('保存できませんでした。'));
+ });}finally{db.close();}
+}
+self.addEventListener('message',event=>{
+ if(!event.data||event.data.type!=='push-channel139'||!event.ports||!event.ports[0])return;
+ const port=event.ports[0];
+ event.waitUntil((async()=>{
+  try{
+   const url=new URL(event.source&&event.source.url||'');if(url.origin!==ROOT.origin||![ROOT.pathname,ROOT.pathname+'index.html'].includes(url.pathname))throw new Error('origin');
+   const channel=event.data.channel;if(channel!==''&&!/^[a-f0-9]{32}$/.test(channel))throw new Error('channel');
+   const old=await pushState139_();if(!old||old.channel!==channel)await pushState139_({channel:channel,sequence:0,totals:null});port.postMessage({ok:true});
+  }catch(e){port.postMessage({ok:false});}
+ })());
+});
+self.addEventListener('push',event=>{
+ event.waitUntil((async()=>{
+  let data=null,stored=null;try{data=event.data&&event.data.json();stored=await pushState139_();}catch(e){}
+  const valid=data&&data.v===139&&stored&&stored.channel&&data.channel===stored.channel&&Number.isSafeInteger(data.sequence)&&data.sequence>0&&['unread','actions','total'].every(k=>Number.isSafeInteger(data[k])&&data[k]>=0&&data[k]<=999999)&&data.total===data.unread+data.actions;
+  if(!valid){await self.registration.showNotification('業務アプリ',{body:'通知設定が変更されています。アプリを開いて確認してください。',tag:'iec-push139-settings',silent:true,data:{push139:true}});return;}
+  const duplicate=data.sequence<=stored.sequence;
+  if(!duplicate){stored.sequence=data.sequence;if(!data.test)stored.totals={unread:data.unread,actions:data.actions,total:data.total};try{await pushState139_(stored);}catch(e){}}
+  const totals=duplicate&&stored.totals?stored.totals:data;
+  await self.registration.showNotification(data.test?'業務アプリ：通知テスト':'業務アプリ',{
+   body:data.test?'通知テストです。音はiPhoneの消音・集中モード・通知設定に従います。':'未読 '+totals.unread+'件 ／ 要対応 '+totals.actions+'件。アプリを開いて確認してください。',
+   tag:data.test?'iec-push139-test':'iec-push139-update',lang:'ja',icon:new URL('../business-app-icon.png',ROOT).href,
+   silent:!!duplicate,renotify:!duplicate,data:{push139:true}
+  });
+  if(!data.test&&!duplicate){try{if(typeof self.navigator.setAppBadge==='function'){if(data.total)await self.navigator.setAppBadge(data.total);else if(typeof self.navigator.clearAppBadge==='function')await self.navigator.clearAppBadge();}}catch(e){}}
+ })());
+});
