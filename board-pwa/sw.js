@@ -5,7 +5,7 @@
 'use strict';
 const ROOT=new URL('./',self.location.href);
 const PREFIX='iec-board-pwa-shell:'+ROOT.pathname+':';
-const CACHE=PREFIX+'v37-r139-push';
+const CACHE=PREFIX+'v38-r218-sound';
 const FILES=['./','./index.html','./styles.css','./config.js','./entry-session.js','./app.js','./push139.js','./settings-menu.js','./manifest.webmanifest'];
 const PUBLIC_URLS=FILES.map(path=>new URL(path,ROOT).href);
 self.addEventListener('install',event=>{
@@ -73,6 +73,16 @@ self.addEventListener('message',event=>{
   }catch(e){port.postMessage({ok:false});}
  })());
 });
+// r218: decide at delivery time, including pushes queued across a time boundary.
+// Missing settings retain legacy behavior; malformed schedules fail silent.
+function soundAllowed218_(settings,now){
+ if(!settings)return true;
+ if(settings.mode==='off')return false;if(settings.mode==='always')return true;
+ if(settings.mode!=='window'||!Array.isArray(settings.days)||!settings.days.length||settings.days.some(d=>!Number.isInteger(d)||d<0||d>6)||!/^([01]\d|2[0-3]):[0-5]\d$/.test(settings.start)||!/^([01]\d|2[0-3]):[0-5]\d$/.test(settings.end)||settings.start===settings.end)return false;
+ const d=new Date((now==null?Date.now():Number(now))+9*3600000),day=d.getUTCDay(),minute=d.getUTCHours()*60+d.getUTCMinutes();
+ const minutes=t=>Number(t.slice(0,2))*60+Number(t.slice(3)),start=minutes(settings.start),end=minutes(settings.end);
+ return start<end?settings.days.includes(day)&&minute>=start&&minute<end:(minute>=start&&settings.days.includes(day))||(minute<end&&settings.days.includes((day+6)%7));
+}
 self.addEventListener('push',event=>{
  event.waitUntil((async()=>{
   let data=null,stored=null;try{data=event.data&&event.data.json();stored=await pushState139_();}catch(e){}
@@ -84,8 +94,9 @@ self.addEventListener('push',event=>{
   await self.registration.showNotification(data.test?'業務アプリ：通知テスト':'業務アプリ',{
    body:data.test?'通知テストです。音はiPhoneの消音・集中モード・通知設定に従います。':'未読 '+totals.unread+'件 ／ 要対応 '+totals.actions+'件。アプリを開いて確認してください。',
    tag:data.test?'iec-push139-test':'iec-push139-update',lang:'ja',icon:new URL('../business-app-icon.png',ROOT).href,
-   silent:!!duplicate,renotify:!duplicate,data:{push139:true}
+   silent:!!duplicate||(data.sound218?!soundAllowed218_(data.sound218):data.silent218===true),renotify:!duplicate,data:{push139:true}
   });
   if(!data.test&&!duplicate){try{if(typeof self.navigator.setAppBadge==='function'){if(data.total)await self.navigator.setAppBadge(data.total);else if(typeof self.navigator.clearAppBadge==='function')await self.navigator.clearAppBadge();}}catch(e){}}
  })());
 });
+
