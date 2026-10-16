@@ -4,7 +4,7 @@
  const transport=window.IecPushTransport139,ROOT=new URL('./',location.href);
  if(!transport||window.top!==window)return;
  const panel=document.createElement('section');panel.id='pushSettings139';
- panel.innerHTML='<h3>🔔 通知</h3><p id="pushStatus139" role="status">通知設定を確認しています。</p><div class="buttons"><button type="button" id="pushEnable139">通知を有効にする</button><button type="button" id="pushTest139">テスト通知を送る</button><button type="button" id="pushStop139">この端末の通知を停止</button></div><p class="small">新しい未読、または要対応の件数が増えたときに通知します。自動確認は約5分ごとです。音はiPhoneの消音・集中モード・通知設定に従います。</p><p id="pushAdminHelp139" class="small" hidden>最初の1回だけ、システム管理者が会社共通の自動送信を開始してください。</p><div class="buttons"><button type="button" id="pushSetup139" hidden>通知の初回設定・自動送信を開始</button></div><p id="pushResult139" role="status" aria-live="polite"></p>';
+ panel.innerHTML='<h3>🔔 通知</h3><p id="pushStatus139" role="status">通知設定を確認しています。</p><div class="buttons"><button type="button" id="pushEnable139">通知を有効にする</button><button type="button" id="pushTest139">テスト通知を送る</button><button type="button" id="pushStop139">この端末の通知を停止</button></div><p class="small">新しい未読・要確認を通知します。トークと配信の保存後に通知処理を開始し、約5分ごとの確認で再試行や期限の変化を補います。音はiPhoneの消音・集中モード・通知設定に従います。</p><p id="pushAdminHelp139" class="small" hidden>最初の1回だけ、システム管理者が会社共通の自動送信を開始してください。</p><div class="buttons"><button type="button" id="pushSetup139" hidden>通知の初回設定・自動送信を開始</button></div><p id="pushResult139" role="status" aria-live="polite"></p>';
  const header=document.querySelector('#settingsSheet .sheet-heading');header.insertAdjacentElement('afterend',panel);
  const el=id=>document.getElementById(id);let info=null,busy=false,checked=false,refreshing=null,epoch=0;
  function standalone(){return !!navigator.standalone||matchMedia('(display-mode: standalone)').matches;}
@@ -30,21 +30,23 @@
  async function worker(){
   let timer;try{return await Promise.race([navigator.serviceWorker.ready,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('通知の準備が完了していません。入口全体を開き直してください。')),12000);})]);}finally{clearTimeout(timer);}
  }
- async function localChannel(channel){
-  const reg=await worker();if(reg.scope!==ROOT.href||!reg.active)throw new Error('通知の入口を確認してください。');
+ let channelQueue=Promise.resolve();
+ function localChannel(channel,generation){const next=channelQueue.then(()=>writeChannel(channel,generation));channelQueue=next.catch(()=>{});return next;}
+ async function writeChannel(channel,generation){
+  const reg=await worker();if(generation!==undefined&&generation!==epoch)return;if(reg.scope!==ROOT.href||!reg.active)throw new Error('通知の入口を確認してください。');
   return new Promise((resolve,reject)=>{const ports=new MessageChannel(),timer=setTimeout(()=>{ports.port1.close();reject(new Error('通知の入口が旧版です。アプリを開き直してください。'));},6000);ports.port1.onmessage=e=>{clearTimeout(timer);ports.port1.close();e.data&&e.data.ok?resolve():reject(new Error('端末に通知設定を保存できません。'));};reg.active.postMessage({type:'push-channel139',channel:channel},[ports.port2]);});
  }
- async function syncLocal(value){
+ async function syncLocal(value,generation){
   if(reason())return;
   const reg=await worker(),sub=await reg.pushManager.getSubscription();
   const hash=sub?b64(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(sub.endpoint)))):'';
   const valid=value.enabled&&sub&&hash===value.endpointHash&&Notification.permission==='granted';
-  await localChannel(valid?value.channel:'');value.enabled=!!valid;if(valid)await transport.usePush(true);
+  if(generation!==undefined&&generation!==epoch)return;await localChannel(valid?value.channel:'',generation);if(generation!==undefined&&generation!==epoch)return;value.enabled=!!valid;if(valid)await transport.usePush(true);
  }
  async function refresh(){
   if(refreshing)return refreshing;
   const generation=epoch;
-  refreshing=(async()=>{try{const value=await transport.request('status');if(generation!==epoch)return;await syncLocal(value);if(generation!==epoch)return;info=value;checked=true;status();}catch(e){if(generation===epoch){note(e.message||e);status();}}finally{refreshing=null;}})();return refreshing;
+  refreshing=(async()=>{try{const value=await transport.request('status');if(generation!==epoch)return;await syncLocal(value,generation);if(generation!==epoch)return;info=value;checked=true;status();}catch(e){if(generation===epoch){note(e.message||e);status();}}finally{refreshing=null;}})();return refreshing;
  }
  async function act(fn){if(busy)return;busy=true;status();note('処理しています…');try{await fn();}catch(e){note(e.message||e);}finally{busy=false;status();}}
  el('pushSetup139').onclick=()=>act(async()=>{
@@ -75,6 +77,7 @@
  window.addEventListener('iec-push-settings139',()=>{status();void refresh();});
  window.addEventListener('iec-push-ready139',()=>{if(!checked&&!busy)void refresh();});
  window.addEventListener('iec-push-reset139',()=>{epoch++;info=null;checked=false;status();if(!reason())void localChannel('').catch(()=>{});});
- navigator.serviceWorker&&navigator.serviceWorker.addEventListener('message',event=>{if(event.data&&event.data.type==='push-open139')transport.refresh();});
+ navigator.serviceWorker&&navigator.serviceWorker.addEventListener('message',event=>{if(event.data&&event.data.type==='push-open139'){if(transport.openNotice)transport.openNotice(event.data.routeP015);else transport.refresh();}});
  status();
 })();
+
