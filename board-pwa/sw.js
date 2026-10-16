@@ -5,7 +5,7 @@
 'use strict';
 const ROOT=new URL('./',self.location.href);
 const PREFIX='iec-board-pwa-shell:'+ROOT.pathname+':';
-const CACHE=PREFIX+'v39-p015-notices';
+const CACHE=PREFIX+'v40-p016-groups';
 const FILES=['./','./index.html','./styles.css','./config.js','./entry-session.js','./app.js','./push139.js','./settings-menu.js','./manifest.webmanifest'];
 const PUBLIC_URLS=FILES.map(path=>new URL(path,ROOT).href);
 self.addEventListener('install',event=>{
@@ -64,7 +64,7 @@ async function pushState139_(next){
  });}finally{db.close();}
 }
 function noticeRouteP015_(r){
- if(r&&r.view==='talk'&&/^(company|reports|health|dm-[a-f0-9]{32})$/.test(r.room))return {view:'talk',room:r.room};
+ if(r&&r.view==='talk'&&/^(company|reports|health|(?:dm|grp)-[a-f0-9]{32})$/.test(r.room))return {view:'talk',room:r.room};
  if(r&&r.view==='approval')return {view:'approval'};
  return {view:'inbox'};
 }
