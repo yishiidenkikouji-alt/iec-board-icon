@@ -5,7 +5,7 @@
   'use strict';
   const APP='iec-board-badge', PROTOCOL=1;
   const URL_KEY='iec.board.pwa.gasUrl.v1';
-  const VERSION='2026.09.30-r139-push';
+  const VERSION='2026.10.16-P015';
   const ENTRY=new URL('./',window.location.href);
   const NOTIFY_KEY='iec.board.pwa.notifications:'+ENTRY.pathname;
   const NOTIFY_TAG=APP+':'+ENTRY.pathname+':snapshot';
@@ -13,11 +13,17 @@
   const frame=el('boardFrame');
   const state={
     gasUrl:'',source:null,origin:'',pageId:'',session:'',sequence:0,
-    count:null,updatedAt:0,status:'waiting',receivedAt:0,permissionBusy:false,
+    count:null,unread:null,actions:null,updatedAt:0,status:'waiting',receivedAt:0,permissionBusy:false,
     testing:false,worker:'確認中',notice:'',badgeBusy:false,badgeDesired:null,
     badgeRevision:0,lastApplied:null,loadStarted:0,notifyEnabled:false,notifyLast:null
   };
-  let lastFocus=null, closeReloadTimer=null;
+  let lastFocus=null, closeReloadTimer=null,pendingNoticeP015=null;
+  function acceptNoticeP015(route){
+    pendingNoticeP015=route&&route.view==='talk'&&/^(company|reports|health|dm-[a-f0-9]{32})$/.test(route.room)?{view:'talk',room:route.room}:{view:route&&route.view==='approval'?'approval':'inbox'};
+    flushNoticeP015();
+  }
+  function flushNoticeP015(){if(pendingNoticeP015&&state.source&&state.session){send('notice-openP015',{routeP015:pendingNoticeP015});pendingNoticeP015=null;}}
+  try{const fragment=new URLSearchParams(location.hash.slice(1));if(fragment.has('notice')){pendingNoticeP015=JSON.parse(fragment.get('notice'));history.replaceState(null,'',location.pathname+location.search);}}catch(ignore){}
   const pushPending139=new Map();
   window.IecPushTransport139={
     connected:()=>!!state.source,
@@ -27,7 +33,7 @@
       pushPending139.set(requestId,{resolve:resolve,reject:reject,timer:timer});send('push-request139',{requestId:requestId,action:action,payload:payload||{}});
     })},
     usePush:async function(enabled){if(enabled&&environment().android&&state.notifyEnabled)await stopNotifications();},
-    refresh:()=>send('refresh')
+    refresh:()=>send('refresh'),openNotice:acceptNoticeP015
   };
   function randomId(){
     return Array.from(crypto.getRandomValues(new Uint32Array(4)),n=>n.toString(16).padStart(8,'0')).join('');
@@ -85,7 +91,7 @@
     // One snapshot notification only. Do not re-post unchanged counts after dismissal.
     if(state.notifyLast===key)return;
     await registration.showNotification(testing?'業務アプリ：通知テスト':'業務アプリ',{
-      body:testing?'通知の試験です（1件）。ホーム画面の通知ドットを確認してください。':'本人の要対応：'+count+'件（取得時点）。最新の内容はボードで確認してください。',
+      body:testing?'通知の試験です（1件）。ホーム画面の通知ドットを確認してください。':state.unread!==null&&state.actions!==null&&state.unread+state.actions===count?'未読'+state.unread+'件・要確認'+state.actions+'件':'未読・要確認 計'+count+'件',
       tag:NOTIFY_TAG,icon:new URL('../business-app-icon.png',ENTRY).href,
       lang:'ja',silent:true,renotify:false,
       timestamp:testing?Date.now():(state.updatedAt||Date.now())
@@ -219,9 +225,9 @@
       if(state.source!==event.source||state.pageId!==data.pageId||state.origin!==event.origin){
         pushPending139.forEach(task=>{clearTimeout(task.timer);task.reject(new Error('接続が更新されました。通知設定を開き直してください。'));});pushPending139.clear();
         state.source=event.source;state.origin=event.origin;state.pageId=data.pageId;state.session=randomId();state.sequence=0;
-        state.status='waiting';state.count=null;state.updatedAt=0;state.receivedAt=0;
+        state.status='waiting';state.count=null;state.unread=null;state.actions=null;state.updatedAt=0;state.receivedAt=0;
       }
-      send('welcome');render();return;
+      send('welcome');if(pendingNoticeP015)acceptNoticeP015(pendingNoticeP015);render();return;
     }
     if(event.source!==state.source||event.origin!==state.origin||data.session!==state.session||data.pageId!==state.pageId)return;
     if(data.type==='push-result139'){const task=pushPending139.get(data.requestId);if(task){pushPending139.delete(data.requestId);clearTimeout(task.timer);data.ok?task.resolve(data.result):task.reject(new Error(String(data.error||'通知設定を確認できませんでした。')));}return;}
@@ -233,11 +239,11 @@
     }
     state.sequence=data.sequence;state.status=data.status;
     if(data.status==='reset'||data.status==='no-user'){
-      state.count=null;state.updatedAt=0;state.receivedAt=0;state.testing=false;
+      state.count=null;state.unread=null;state.actions=null;state.updatedAt=0;state.receivedAt=0;state.testing=false;
       queueBadge(0); // Do not leave a former user's badge after a user change.
       window.dispatchEvent(new Event('iec-push-reset139'));
     }else if(data.status==='ready'){
-      state.count=data.count;state.updatedAt=data.updatedAt;state.receivedAt=Date.now();applyActual();
+      state.count=data.count;const split=Number.isSafeInteger(data.unread)&&data.unread>=0&&Number.isSafeInteger(data.actions)&&data.actions>=0&&data.unread+data.actions===data.count;state.unread=split?data.unread:null;state.actions=split?data.actions:null;state.updatedAt=data.updatedAt;state.receivedAt=Date.now();applyActual();
       window.dispatchEvent(new Event('iec-push-ready139'));
     }
     render();
@@ -264,7 +270,7 @@
   }
   function configureFrame(url){
     state.gasUrl=url;state.source=null;state.origin='';state.pageId='';state.session='';state.sequence=0;
-    state.count=null;state.status='waiting';state.updatedAt=0;state.receivedAt=0;state.loadStarted=Date.now();
+    state.count=null;state.unread=null;state.actions=null;state.status='waiting';state.updatedAt=0;state.receivedAt=0;state.loadStarted=Date.now();
     frame.hidden=false;el('startGuide').hidden=true;frame.src=url;
     el('gasUrl').value=url;el('directLink').href=url;el('directLink').hidden=false;render();
     clearTimeout(closeReloadTimer);
@@ -331,4 +337,5 @@
   else {el('startStatus').textContent='接続先の /exec URLを「接続先設定」で登録してください。バッジ単独の実機試験は、接続前でも実行できます。';render();}
   void registerWorker();
 })();
+
 
