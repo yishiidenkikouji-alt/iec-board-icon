@@ -8,6 +8,7 @@
   const ROOT=new URL('./',location.href), frame=document.getElementById('boardFrame');
   if(!frame||window.top!==window||location.origin!=='https://yishiidenkikouji-alt.github.io'||ROOT.pathname!=='/iec-board-icon/board-pwa/')return;
   const state={nonce:'',page:'',source:null,origin:'',key:'',lastSeq:0,generation:0};
+  function diagnostic(code){try{if(window.IecConnectionDiagnosticsD1)window.IecConnectionDiagnosticsD1.session(code);}catch(ignore){}}
   function random(){return Array.from(crypto.getRandomValues(new Uint8Array(32)),x=>x.toString(16).padStart(2,'0')).join('');}
   function setStatus(text){const el=document.getElementById('entrySessionStatus');if(el)el.textContent=text;}
   function validTicket(value){return typeof value==='string'&&value.length<=2000&&/^iec-resume-v1\.[A-Za-z0-9_-]{50,1600}\.[A-Za-z0-9_-]{43}$/.test(value);}
@@ -24,10 +25,11 @@
   }
   function reply(type,body){if(state.source)state.source.postMessage(Object.assign({app:APP,type:type,nonce:state.nonce,page:state.page},body||{}),state.origin);}
   function prepare(value){
+    diagnostic('waiting');
     state.generation++;state.nonce='';state.page='';state.source=null;state.origin='';state.lastSeq=0;state.key='';
     let url;try{url=new URL(String(value));}catch(e){return value;}
     if(url.protocol!=='https:'||url.hostname!=='script.google.com'||url.username||url.password||url.port||!/^\/(?:a\/[^/]+\/)?macros\/s\/[A-Za-z0-9_-]{20,256}\/exec\/?$/.test(url.pathname))return value;
-    state.nonce=random();
+    state.nonce=random();diagnostic('prepared');
     state.key='iec.entry.resume.v1:'+ROOT.pathname+':'+url.origin+url.pathname.replace(/\/$/,'');
     // A short-lived channel nonce, NOT an identity or a login credential.
     url.searchParams.set('iec_resume_nonce',state.nonce);
@@ -39,7 +41,7 @@
     const descriptor=Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype,'src');
     if(!descriptor||!descriptor.get||!descriptor.set)throw new Error('src');
     Object.defineProperty(frame,'src',{configurable:true,get:function(){return descriptor.get.call(this);},set:function(value){descriptor.set.call(this,prepare(value));}});
-  }catch(e){setStatus('端末保持を準備できませんでした。ブラウザーを確認してください。');return;}
+  }catch(e){diagnostic('unavailable');setStatus('端末保持を準備できませんでした。ブラウザーを確認してください。');return;}
   window.addEventListener('message',function(event){
     const d=event.data;
     if(!d||d.app!==APP||!state.nonce||d.nonce!==state.nonce||!/^[a-f0-9]{32}$/.test(String(d.page||''))||!allowedOrigin(event.origin)||!belongs(event.source))return;
@@ -47,8 +49,8 @@
       if(state.source&&(state.source!==event.source||state.origin!==event.origin))return;
       if(state.page!==d.page)state.lastSeq=0;
       state.source=event.source;state.origin=event.origin;state.page=d.page;
-      try{const saved=read();reply('ready',{revision:saved.revision,ticket:saved.ticket,version:VERSION});setStatus(saved.ticket?'端末保持 r22：保存した利用者をGASで検証中…':'端末保持 r22：未保存（GASで本人を登録後に保存します）');}
-      catch(e){reply('ready',{revision:'',ticket:'',version:VERSION,error:'端末内の保存領域を読み取れません。'});setStatus('端末保持 r22：保存領域を利用できません');}
+      try{const saved=read();diagnostic(saved.ticket?'sent':'empty');reply('ready',{revision:saved.revision,ticket:saved.ticket,version:VERSION});setStatus(saved.ticket?'端末保持 r22：保存した利用者をGASで検証中…':'端末保持 r22：未保存（GASで本人を登録後に保存します）');}
+      catch(e){diagnostic('readError');reply('ready',{revision:'',ticket:'',version:VERSION,error:'端末内の保存領域を読み取れません。'});setStatus('端末保持 r22：保存領域を利用できません');}
       return;
     }
     if(event.source!==state.source||event.origin!==state.origin||d.page!==state.page||!Number.isSafeInteger(d.seq)||d.seq<=state.lastSeq)return;
@@ -71,9 +73,11 @@
       }
       ack.ok=true;
     }catch(e){ack.error=String(e&&e.message||'端末への保存に失敗しました。');if(!ack.reason)ack.reason='storage';}
+    diagnostic(ack.ok?(d.type==='save'?'saved':'removed'):(ack.reason==='conflict'?'conflict':'writeError'));
     reply('ack',ack);
   });
   // Deliberately no transmission of tickets in URLs, logs, analytics, or fetch.
   const el=document.getElementById('entrySessionVersion');if(el)el.textContent=VERSION;
   setStatus('端末保持 r22：接続先の設定を待っています');
 })();
+
