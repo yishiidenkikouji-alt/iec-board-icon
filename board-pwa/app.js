@@ -5,7 +5,7 @@
   'use strict';
   const APP='iec-board-badge', PROTOCOL=1;
   const URL_KEY='iec.board.pwa.gasUrl.v1';
-  const VERSION='2026.10.16-P016';
+  const VERSION='2026.10.29-D1';
   const ENTRY=new URL('./',window.location.href);
   const NOTIFY_KEY='iec.board.pwa.notifications:'+ENTRY.pathname;
   const NOTIFY_TAG=APP+':'+ENTRY.pathname+':snapshot';
@@ -315,7 +315,7 @@
   el('connectionForm').onsubmit=event=>{
     event.preventDefault();const url=normaliseUrl(el('gasUrl').value);
     if(!url){notice('script.google.comのウェブアプリURL（末尾 /exec）を入力してください。/dev や編集画面のURLは使用できません。');return;}
-    try{localStorage.setItem(URL_KEY,url);}catch(e){notice('接続先を端末に保存できません。この画面を閉じると再入力が必要です。');}
+    try{localStorage.setItem(URL_KEY,url);try{if(window.IecConnectionDiagnosticsD1)window.IecConnectionDiagnosticsD1.connection(localStorage.getItem(URL_KEY)===url);}catch(ignore){}}catch(e){try{if(window.IecConnectionDiagnosticsD1)window.IecConnectionDiagnosticsD1.connection(false);}catch(ignore){}notice('接続先を端末に保存できません。この画面を閉じると再入力が必要です。');}
     state.testing=false;queueBadge(0);configureFrame(url);closeSettings();
   };
   el('reloadBoardButton').onclick=()=>{if(state.gasUrl){configureFrame(state.gasUrl);closeSettings();}};
@@ -337,5 +337,6 @@
   else {el('startStatus').textContent='接続先の /exec URLを「接続先設定」で登録してください。バッジ単独の実機試験は、接続前でも実行できます。';render();}
   void registerWorker();
 })();
+
 
 
