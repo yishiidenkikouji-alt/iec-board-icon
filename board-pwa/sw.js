@@ -5,8 +5,8 @@
 'use strict';
 const ROOT=new URL('./',self.location.href);
 const PREFIX='iec-board-pwa-shell:'+ROOT.pathname+':';
-const CACHE=PREFIX+'v40-p016-groups';
-const FILES=['./','./index.html','./styles.css','./config.js','./entry-session.js','./app.js','./push139.js','./settings-menu.js','./manifest.webmanifest'];
+const CACHE=PREFIX+'v41-d1-connection-diagnostics';
+const FILES=['./','./index.html','./styles.css','./config.js','./connection-diagnostics.js','./entry-session.js','./app.js','./push139.js','./settings-menu.js','./manifest.webmanifest'];
 const PUBLIC_URLS=FILES.map(path=>new URL(path,ROOT).href);
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(PUBLIC_URLS)).then(()=>self.skipWaiting()));
@@ -107,5 +107,6 @@ self.addEventListener('push',event=>{
   if(!data.test&&!duplicate){try{if(typeof self.navigator.setAppBadge==='function'){if(data.total)await self.navigator.setAppBadge(data.total);else if(typeof self.navigator.clearAppBadge==='function')await self.navigator.clearAppBadge();}}catch(e){}}
  }));
 });
+
 
 
