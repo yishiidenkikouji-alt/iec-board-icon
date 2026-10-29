@@ -5,7 +5,7 @@
   'use strict';
   const APP='iec-board-badge', PROTOCOL=1;
   const URL_KEY='iec.board.pwa.gasUrl.v1';
-  const VERSION='2026.10.29-D1';
+  const VERSION='2026.10.29-D2';
   const ENTRY=new URL('./',window.location.href);
   const NOTIFY_KEY='iec.board.pwa.notifications:'+ENTRY.pathname;
   const NOTIFY_TAG=APP+':'+ENTRY.pathname+':snapshot';
@@ -115,6 +115,7 @@
   function notice(text){state.notice=String(text||'');el('actionStatus').textContent=state.notice;}
   function stale(){return !!state.updatedAt&&Date.now()-state.updatedAt>7*60*1000;}
   function render(){
+    try{if(window.IecConnectionDiagnosticsD1&&window.IecConnectionDiagnosticsD1.bridge)window.IecConnectionDiagnosticsD1.bridge(state.status);}catch(ignore){}
     const env=environment(), ready=state.status==='ready'&&!stale();
     el('entryVersion').textContent=VERSION;
     el('launchMode').textContent=isStandalone()?'ホーム画面アプリ':'通常のブラウザー';
