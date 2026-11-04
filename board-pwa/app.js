@@ -5,7 +5,7 @@
   'use strict';
   const APP='iec-board-badge', PROTOCOL=1;
   const URL_KEY='iec.board.pwa.gasUrl.v1';
-  const VERSION='2026.10.29-D2';
+  const VERSION='2026.11.04-B1';
   const ENTRY=new URL('./',window.location.href);
   const NOTIFY_KEY='iec.board.pwa.notifications:'+ENTRY.pathname;
   const NOTIFY_TAG=APP+':'+ENTRY.pathname+':snapshot';
@@ -32,7 +32,7 @@
       const requestId=randomId(),timer=setTimeout(()=>{pushPending139.delete(requestId);reject(new Error('通知設定の応答を確認できませんでした。設定を開き直して確認してください。'));},45000);
       pushPending139.set(requestId,{resolve:resolve,reject:reject,timer:timer});send('push-request139',{requestId:requestId,action:action,payload:payload||{}});
     })},
-    usePush:async function(enabled){if(enabled&&environment().android&&state.notifyEnabled)await stopNotifications();},
+    usePush:async function(enabled){if(enabled&&environment().android&&state.notifyEnabled)await stopNotifications();syncActualBadge();},
     refresh:()=>send('refresh'),openNotice:acceptNoticeP015
   };
   function randomId(){
@@ -214,9 +214,37 @@
     }catch(e){notice('バッジ更新を確認できません：'+String(e&&e.message||e));}
     finally{state.badgeBusy=false;render();}
   }
+  let badgeSyncBusy=false,badgeSyncRevision=0,badgeSyncRetry=null,badgeSyncAttempts=0;
+  function syncActualBadge(){
+    badgeSyncRevision++;badgeSyncAttempts=0;clearTimeout(badgeSyncRetry);void flushActualBadge();
+  }
+  async function flushActualBadge(){
+    // Web Push disables the Android notification trial. Actual-count cleanup
+    // must still run, independently of that opt-in and the numeric badge API.
+    if(badgeSyncBusy||!navigator.serviceWorker||document.hidden||state.testing||state.status!=='ready'||stale()||state.unread===null||state.actions===null)return;
+    badgeSyncBusy=true;const revision=badgeSyncRevision;let timer;
+    try{
+      const registration=await Promise.race([navigator.serviceWorker.ready,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('worker')),6000);})]);
+      clearTimeout(timer);
+      if(revision!==badgeSyncRevision||document.hidden||state.testing||state.status!=='ready'||stale())return;
+      if(registration.scope!==ENTRY.href||!registration.active)return;
+      await new Promise((resolve,reject)=>{
+        const ports=new MessageChannel();
+        timer=setTimeout(()=>{ports.port1.close();reject(new Error('badge-sync'));},6000);
+        ports.port1.onmessage=event=>{clearTimeout(timer);ports.port1.close();event.data&&event.data.ok?resolve():reject(new Error('badge-sync'));};
+        registration.active.postMessage({type:'badge-stateB1',unread:state.unread,actions:state.actions,total:state.count,at:state.updatedAt},[ports.port2]);
+      });
+      badgeSyncAttempts=0;
+    }catch(e){
+      if(revision===badgeSyncRevision&&++badgeSyncAttempts<=2)badgeSyncRetry=setTimeout(()=>{void flushActualBadge();},3000);
+    }finally{
+      clearTimeout(timer);badgeSyncBusy=false;
+      if(revision!==badgeSyncRevision)void flushActualBadge();
+    }
+  }
   function applyActual(){
     if(state.testing){queueBadge(1);return;}
-    if(state.status==='ready'&&!stale()&&state.count!==null)queueBadge(state.count);
+    if(state.status==='ready'&&!stale()&&state.count!==null){queueBadge(state.count);syncActualBadge();}
   }
   window.addEventListener('message',function(event){
     const data=event.data;
@@ -310,7 +338,7 @@
   };
   el('endTestButton').onclick=()=>{
     state.testing=false;
-    if(state.status==='ready'&&!stale())queueBadge(state.count);else queueBadge(0);
+    if(state.status==='ready'&&!stale())applyActual();else queueBadge(0);
     if(state.source)send('refresh');render();
   };
   el('connectionForm').onsubmit=event=>{
@@ -321,6 +349,7 @@
   };
   el('reloadBoardButton').onclick=()=>{if(state.gasUrl){configureFrame(state.gasUrl);closeSettings();}};
   document.addEventListener('visibilitychange',resume);window.addEventListener('pageshow',resume);
+  if(navigator.serviceWorker)navigator.serviceWorker.addEventListener('controllerchange',()=>{syncActualBadge();resume();});
   window.addEventListener('focus',()=>{render();});
   window.addEventListener('offline',()=>{notice('オフラインです。新しい件数は取得していません。');render();});
   window.addEventListener('online',resume);
@@ -338,6 +367,7 @@
   else {el('startStatus').textContent='接続先の /exec URLを「接続先設定」で登録してください。バッジ単独の実機試験は、接続前でも実行できます。';render();}
   void registerWorker();
 })();
+
 
 
 

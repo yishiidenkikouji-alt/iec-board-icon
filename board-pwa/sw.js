@@ -5,7 +5,7 @@
 'use strict';
 const ROOT=new URL('./',self.location.href);
 const PREFIX='iec-board-pwa-shell:'+ROOT.pathname+':';
-const CACHE=PREFIX+'v42-d2-visible-diagnostics';
+const CACHE=PREFIX+'v43-b1-read-badge-sync';
 const FILES=['./','./index.html','./styles.css','./config.js','./connection-diagnostics.js','./entry-session.js','./app.js','./push139.js','./settings-menu.js','./manifest.webmanifest'];
 const PUBLIC_URLS=FILES.map(path=>new URL(path,ROOT).href);
 self.addEventListener('install',event=>{
@@ -70,12 +70,34 @@ function noticeRouteP015_(r){
 }
 let pushQueueP015=Promise.resolve();
 function queuePushP015_(fn){const next=pushQueueP015.then(fn,fn);pushQueueP015=next.catch(()=>{});return next;}
+function validTotalsB1_(value){return value&&['unread','actions','total'].every(k=>Number.isSafeInteger(value[k])&&value[k]>=0&&value[k]<=999999)&&value.total===value.unread+value.actions;}
+async function applyBadgeB1_(total){
+ if(total===0&&typeof self.navigator.clearAppBadge==='function')await self.navigator.clearAppBadge();
+ else if(typeof self.navigator.setAppBadge==='function')await self.navigator.setAppBadge(total);
+}
+async function clearReadNotificationsB1_(){
+ const tags=['iec-board-badge:'+ROOT.pathname+':snapshot','iec-push139-update','iec-push139-test'];
+ const shown=await self.registration.getNotifications();
+ shown.filter(notification=>tags.includes(notification.tag)).forEach(notification=>notification.close());
+}
 self.addEventListener('message',event=>{
- if(!event.data||event.data.type!=='push-channel139'||!event.ports||!event.ports[0])return;
+ if(!event.data||!['push-channel139','badge-stateB1'].includes(event.data.type)||!event.ports||!event.ports[0])return;
  const port=event.ports[0];
  event.waitUntil(queuePushP015_(async()=>{
   try{
    const url=new URL(event.source&&event.source.url||'');if(url.origin!==ROOT.origin||![ROOT.pathname,ROOT.pathname+'index.html'].includes(url.pathname))throw new Error('origin');
+   if(event.data.type==='badge-stateB1'){
+    const data=event.data;
+    if(!validTotalsB1_(data)||!Number.isFinite(data.at)||data.at>Date.now()+60000||data.at<Date.now()-10*60*1000)throw new Error('counts');
+    const old=await pushState139_()||{channel:'',sequence:0,totals:null};
+    // Serialize foreground reads with pushes; an older tab must not overwrite
+    // a more recent snapshot. Only aggregate counts are persisted.
+    if(data.at<(old.totalsAt||0)){port.postMessage({ok:true});return;}
+    old.totals={unread:data.unread,actions:data.actions,total:data.total,routeP015:{view:'inbox'}};old.totalsAt=data.at;
+    await pushState139_(old);
+    if(data.total===0)await clearReadNotificationsB1_();
+    await applyBadgeB1_(data.total);port.postMessage({ok:true});return;
+   }
    const channel=event.data.channel;if(channel!==''&&!/^[a-f0-9]{32}$/.test(channel))throw new Error('channel');
    const old=await pushState139_();if(!old||old.channel!==channel)await pushState139_({channel:channel,sequence:0,totals:null});port.postMessage({ok:true});
   }catch(e){port.postMessage({ok:false});}
@@ -94,19 +116,21 @@ function soundAllowed218_(settings,now){
 self.addEventListener('push',event=>{
  event.waitUntil(queuePushP015_(async()=>{
   let data=null,stored=null;try{data=event.data&&event.data.json();stored=await pushState139_();}catch(e){}
-  const valid=data&&data.v===139&&stored&&stored.channel&&data.channel===stored.channel&&Number.isSafeInteger(data.sequence)&&data.sequence>0&&['unread','actions','total'].every(k=>Number.isSafeInteger(data[k])&&data[k]>=0&&data[k]<=999999)&&data.total===data.unread+data.actions;
+  const valid=data&&data.v===139&&stored&&stored.channel&&data.channel===stored.channel&&Number.isSafeInteger(data.sequence)&&data.sequence>0&&validTotalsB1_(data);
   if(!valid){await self.registration.showNotification('業務アプリ',{body:'通知の内容を確認できませんでした。アプリを開いて最新情報をご確認ください。',tag:'iec-push139-settings',silent:true,data:{push139:true}});return;}
   const duplicate=data.sequence<=stored.sequence;
-  if(!duplicate){stored.sequence=data.sequence;if(!data.test)stored.totals={unread:data.unread,actions:data.actions,total:data.total,routeP015:noticeRouteP015_(data.routeP015)};try{await pushState139_(stored);}catch(e){}}
-  const totals=duplicate&&stored.totals?stored.totals:data;
+  const older=!data.test&&stored.totals&&Number.isFinite(data.at)&&data.at<=(stored.totalsAt||0);
+  if(!duplicate){stored.sequence=data.sequence;if(!data.test&&!older){stored.totals={unread:data.unread,actions:data.actions,total:data.total,routeP015:noticeRouteP015_(data.routeP015)};stored.totalsAt=Number.isFinite(data.at)&&data.at<=Date.now()+60000?data.at:0;}try{await pushState139_(stored);}catch(e){}}
+  const totals=(duplicate||older)&&stored.totals?stored.totals:data;
   await self.registration.showNotification(data.test?'業務アプリ：通知テスト':'業務アプリ',{
    body:data.test?'通知テストです。音はiPhoneの消音・集中モード・通知設定に従います。':'未読'+totals.unread+'件・要確認'+totals.actions+'件',
    tag:data.test?'iec-push139-test':'iec-push139-update',lang:'ja',icon:new URL('../business-app-icon.png',ROOT).href,
-   silent:!!duplicate||(data.sound218?!soundAllowed218_(data.sound218):data.silent218===true),renotify:!duplicate,data:{push139:true,routeP015:noticeRouteP015_(totals.routeP015)}
+   silent:!!duplicate||!!older||(data.sound218?!soundAllowed218_(data.sound218):data.silent218===true),renotify:!duplicate&&!older,data:{push139:true,routeP015:noticeRouteP015_(totals.routeP015)}
   });
-  if(!data.test&&!duplicate){try{if(typeof self.navigator.setAppBadge==='function'){if(data.total)await self.navigator.setAppBadge(data.total);else if(typeof self.navigator.clearAppBadge==='function')await self.navigator.clearAppBadge();}}catch(e){}}
+  if(!data.test){try{await applyBadgeB1_(totals.total);}catch(e){}}
  }));
 });
+
 
 
 

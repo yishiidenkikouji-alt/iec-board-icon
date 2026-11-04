@@ -59,7 +59,7 @@ function env(map=new Map(),options={}){
  // Diagnostics missing / broken cannot block normal authentication.
  e=env(new Map([[URL_KEY,url],[key,stored]]));delete e.ctx.IecConnectionDiagnosticsD1;e.run('entry-session.js');e.frame.src=url;nonce=new URL(e.frame.src).searchParams.get('iec_resume_nonce');e.message({...base,nonce,type:'hello'});assert.equal(e.replies.at(-1).d.ticket,ticket);
  e=env(new Map([[URL_KEY,url],[key,stored]]));e.ctx.IecConnectionDiagnosticsD1={session(){throw Error('broken UI');}};e.run('entry-session.js');e.frame.src=url;nonce=new URL(e.frame.src).searchParams.get('iec_resume_nonce');e.message({...base,nonce,type:'hello'});assert.equal(e.replies.at(-1).d.ticket,ticket);
- const html=fs.readFileSync(dir+'index.html','utf8'),sw=fs.readFileSync(dir+'sw.js','utf8');assert.ok(html.indexOf('connection-diagnostics.js')<html.indexOf('entry-session.js'));assert.ok(sw.includes("'./connection-diagnostics.js'"));assert.ok(sw.includes('v42-d2-visible-diagnostics'));
+ const html=fs.readFileSync(dir+'index.html','utf8'),sw=fs.readFileSync(dir+'sw.js','utf8');assert.ok(html.indexOf('connection-diagnostics.js')<html.indexOf('entry-session.js'));assert.ok(sw.includes("'./connection-diagnostics.js'"));assert.ok(sw.includes('v43-b1-read-badge-sync'));
  
  // Registration overlay is inside GAS; diagnostic launcher belongs to the parent body.
  e=env();e.run('entry-session.js');e.run('app.js');e.elements.entryBar.hidden=true;
@@ -71,3 +71,4 @@ function env(map=new Map(),options={}){
  e.ctx.IecConnectionDiagnosticsD1.bridge('ready');e.ctx.IecConnectionDiagnosticsD1.bridge('untrusted');assert.equal(launcher.hidden,true);
  console.log('PASS: D2 launcher outside hidden GAS/header, bridge visibility,  startup/current states, persistence marker across reload, denied/dropped storage, malformed data, redaction/copy, resume protocol origin/nonce/source/conflict/save/remove, real app submit, missing/broken diagnostics isolation, SW inclusion.');
 })().catch(e=>{console.error(e);process.exit(1);});
+
