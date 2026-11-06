@@ -5,7 +5,7 @@
   'use strict';
   const APP='iec-board-badge', PROTOCOL=1;
   const URL_KEY='iec.board.pwa.gasUrl.v1';
-  const VERSION='2026.11.04-B1';
+  const VERSION='2026.11.06-B2';
   const ENTRY=new URL('./',window.location.href);
   const NOTIFY_KEY='iec.board.pwa.notifications:'+ENTRY.pathname;
   const NOTIFY_TAG=APP+':'+ENTRY.pathname+':snapshot';
@@ -13,7 +13,7 @@
   const frame=el('boardFrame');
   const state={
     gasUrl:'',source:null,origin:'',pageId:'',session:'',sequence:0,
-    count:null,unread:null,actions:null,updatedAt:0,status:'waiting',receivedAt:0,permissionBusy:false,
+    count:null,unread:null,actions:null,complete:false,updatedAt:0,status:'waiting',receivedAt:0,permissionBusy:false,badgeSyncStatus:'最新件数を待っています',
     testing:false,worker:'確認中',notice:'',badgeBusy:false,badgeDesired:null,
     badgeRevision:0,lastApplied:null,loadStarted:0,notifyEnabled:false,notifyLast:null
   };
@@ -121,6 +121,7 @@
     el('launchMode').textContent=isStandalone()?'ホーム画面アプリ':'通常のブラウザー';
     el('permissionState').textContent=({granted:'許可済み',denied:'拒否（端末の設定を確認）',default:'未許可',unavailable:'この環境では利用できません'})[env.permission]||env.permission;
     el('workerState').textContent=state.worker;
+    if(el('badgeSyncState'))el('badgeSyncState').textContent=state.badgeSyncStatus;
     el('bridgeState').textContent=state.source?'接続済み'+(ready?'':'／最新件数を確認中'):state.gasUrl?'連携待ち（GAS用Indexの更新・利用者登録を確認）':'接続先URLが未設定';
     el('actualCount').textContent=state.count===null?'未取得':state.count+'件'+(!ready?'（最後の取得値）':'');
     el('receivedAt').textContent=state.receivedAt?new Date(state.receivedAt).toLocaleTimeString('ja-JP'):'—';
@@ -214,36 +215,42 @@
     }catch(e){notice('バッジ更新を確認できません：'+String(e&&e.message||e));}
     finally{state.badgeBusy=false;render();}
   }
-  let badgeSyncBusy=false,badgeSyncRevision=0,badgeSyncRetry=null,badgeSyncAttempts=0;
-  function syncActualBadge(){
+  let badgeSyncBusy=false,badgeSyncRevision=0,badgeSyncRetry=null,badgeSyncAttempts=0,badgeSyncExpected=null;
+  function syncActualBadge(expectedSequence){
+    badgeSyncExpected=Number.isSafeInteger(expectedSequence)?expectedSequence:null;
     badgeSyncRevision++;badgeSyncAttempts=0;clearTimeout(badgeSyncRetry);void flushActualBadge();
   }
   async function flushActualBadge(){
     // Web Push disables the Android notification trial. Actual-count cleanup
     // must still run, independently of that opt-in and the numeric badge API.
-    if(badgeSyncBusy||!navigator.serviceWorker||document.hidden||state.testing||state.status!=='ready'||stale()||state.unread===null||state.actions===null)return;
+    if(badgeSyncBusy||!navigator.serviceWorker||document.hidden||state.testing||state.status!=='ready'||stale()||!state.complete||state.unread===null||state.actions===null)return;
     badgeSyncBusy=true;const revision=badgeSyncRevision;let timer;
+    state.badgeSyncStatus='スマホ側の通知を同期しています';render();
     try{
       const registration=await Promise.race([navigator.serviceWorker.ready,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('worker')),6000);})]);
       clearTimeout(timer);
-      if(revision!==badgeSyncRevision||document.hidden||state.testing||state.status!=='ready'||stale())return;
+      if(revision!==badgeSyncRevision||document.hidden||state.testing||state.status!=='ready'||!state.complete||stale())return;
       if(registration.scope!==ENTRY.href||!registration.active)return;
-      await new Promise((resolve,reject)=>{
+      const outcome=await new Promise((resolve,reject)=>{
         const ports=new MessageChannel();
         timer=setTimeout(()=>{ports.port1.close();reject(new Error('badge-sync'));},6000);
-        ports.port1.onmessage=event=>{clearTimeout(timer);ports.port1.close();event.data&&event.data.ok?resolve():reject(new Error('badge-sync'));};
-        registration.active.postMessage({type:'badge-stateB1',unread:state.unread,actions:state.actions,total:state.count,at:state.updatedAt},[ports.port2]);
+        ports.port1.onmessage=event=>{clearTimeout(timer);ports.port1.close();event.data&&event.data.ok&&event.data.persisted!==false?resolve(event.data):reject(new Error('badge-sync'));};
+        registration.active.postMessage({type:'badge-stateB1',unread:state.unread,actions:state.actions,total:state.count,at:state.updatedAt,expectedSequence:badgeSyncExpected},[ports.port2]);
       });
       badgeSyncAttempts=0;
+      if(revision===badgeSyncRevision)state.badgeSyncStatus=outcome.ignored?'新しい通知があります。最新件数を確認してください':state.count===0?'0件・残った通知を消去しました':'未読・要対応 '+state.count+'件で同期しました';
     }catch(e){
+      state.badgeSyncStatus='通知の同期を再確認しています';
       if(revision===badgeSyncRevision&&++badgeSyncAttempts<=2)badgeSyncRetry=setTimeout(()=>{void flushActualBadge();},3000);
+      else if(revision===badgeSyncRevision)state.badgeSyncStatus='通知を同期できませんでした。アプリを開き直してください';
     }finally{
-      clearTimeout(timer);badgeSyncBusy=false;
+      clearTimeout(timer);badgeSyncBusy=false;render();
       if(revision!==badgeSyncRevision)void flushActualBadge();
     }
   }
   function applyActual(){
     if(state.testing){queueBadge(1);return;}
+    if(!state.complete){state.badgeSyncStatus='すべての最新件数の確認を待っています';return;}
     if(state.status==='ready'&&!stale()&&state.count!==null){queueBadge(state.count);syncActualBadge();}
   }
   window.addEventListener('message',function(event){
@@ -254,7 +261,7 @@
       if(state.source!==event.source||state.pageId!==data.pageId||state.origin!==event.origin){
         pushPending139.forEach(task=>{clearTimeout(task.timer);task.reject(new Error('接続が更新されました。通知設定を開き直してください。'));});pushPending139.clear();
         state.source=event.source;state.origin=event.origin;state.pageId=data.pageId;state.session=randomId();state.sequence=0;
-        state.status='waiting';state.count=null;state.unread=null;state.actions=null;state.updatedAt=0;state.receivedAt=0;
+        state.status='waiting';state.count=null;state.unread=null;state.actions=null;state.complete=false;state.updatedAt=0;state.receivedAt=0;
       }
       send('welcome');if(pendingNoticeP015)acceptNoticeP015(pendingNoticeP015);render();return;
     }
@@ -268,11 +275,11 @@
     }
     state.sequence=data.sequence;state.status=data.status;
     if(data.status==='reset'||data.status==='no-user'){
-      state.count=null;state.unread=null;state.actions=null;state.updatedAt=0;state.receivedAt=0;state.testing=false;
+      state.count=null;state.unread=null;state.actions=null;state.complete=false;state.updatedAt=0;state.receivedAt=0;state.testing=false;
       queueBadge(0); // Do not leave a former user's badge after a user change.
       window.dispatchEvent(new Event('iec-push-reset139'));
     }else if(data.status==='ready'){
-      state.count=data.count;const split=Number.isSafeInteger(data.unread)&&data.unread>=0&&Number.isSafeInteger(data.actions)&&data.actions>=0&&data.unread+data.actions===data.count;state.unread=split?data.unread:null;state.actions=split?data.actions:null;state.updatedAt=data.updatedAt;state.receivedAt=Date.now();applyActual();
+      state.count=data.count;const split=Number.isSafeInteger(data.unread)&&data.unread>=0&&Number.isSafeInteger(data.actions)&&data.actions>=0&&data.unread+data.actions===data.count,legacyZero=data.count===0&&data.unread==null&&data.actions==null;state.unread=split?data.unread:legacyZero?0:null;state.actions=split?data.actions:legacyZero?0:null;state.complete=data.complete!==false&&data.previous!==true;state.updatedAt=data.updatedAt;state.receivedAt=Date.now();applyActual();
       window.dispatchEvent(new Event('iec-push-ready139'));
     }
     render();
@@ -299,7 +306,7 @@
   }
   function configureFrame(url){
     state.gasUrl=url;state.source=null;state.origin='';state.pageId='';state.session='';state.sequence=0;
-    state.count=null;state.unread=null;state.actions=null;state.status='waiting';state.updatedAt=0;state.receivedAt=0;state.loadStarted=Date.now();
+    state.count=null;state.unread=null;state.actions=null;state.complete=false;state.status='waiting';state.updatedAt=0;state.receivedAt=0;state.loadStarted=Date.now();
     frame.hidden=false;el('startGuide').hidden=true;frame.src=url;
     el('gasUrl').value=url;el('directLink').href=url;el('directLink').hidden=false;render();
     clearTimeout(closeReloadTimer);
@@ -309,7 +316,7 @@
   }
   function resume(){
     if(document.hidden)return;
-    if(state.source)send('refresh');
+    if(state.source){send('status-request');send('refresh');}
     render();
     if(state.testing)queueBadge(1);
   }
@@ -350,6 +357,10 @@
   el('reloadBoardButton').onclick=()=>{if(state.gasUrl){configureFrame(state.gasUrl);closeSettings();}};
   document.addEventListener('visibilitychange',resume);window.addEventListener('pageshow',resume);
   if(navigator.serviceWorker)navigator.serviceWorker.addEventListener('controllerchange',()=>{syncActualBadge();resume();});
+  if(navigator.serviceWorker)navigator.serviceWorker.addEventListener('message',event=>{
+    const data=event.data;
+    if(event.source&&event.source.scriptURL===new URL('./sw.js',ENTRY).href&&data&&data.type==='badge-recheckB2'&&Number.isSafeInteger(data.sequence)&&data.sequence>0&&state.count===0&&!document.hidden)syncActualBadge(data.sequence);
+  });
   window.addEventListener('focus',()=>{render();});
   window.addEventListener('offline',()=>{notice('オフラインです。新しい件数は取得していません。');render();});
   window.addEventListener('online',resume);

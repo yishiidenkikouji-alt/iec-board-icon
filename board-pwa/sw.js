@@ -5,7 +5,7 @@
 'use strict';
 const ROOT=new URL('./',self.location.href);
 const PREFIX='iec-board-pwa-shell:'+ROOT.pathname+':';
-const CACHE=PREFIX+'v43-b1-read-badge-sync';
+const CACHE=PREFIX+'v44-b2-notification-resume';
 const FILES=['./','./index.html','./styles.css','./config.js','./connection-diagnostics.js','./entry-session.js','./app.js','./push139.js','./settings-menu.js','./manifest.webmanifest'];
 const PUBLIC_URLS=FILES.map(path=>new URL(path,ROOT).href);
 self.addEventListener('install',event=>{
@@ -76,7 +76,7 @@ async function applyBadgeB1_(total){
  else if(typeof self.navigator.setAppBadge==='function')await self.navigator.setAppBadge(total);
 }
 async function clearReadNotificationsB1_(){
- const tags=['iec-board-badge:'+ROOT.pathname+':snapshot','iec-push139-update','iec-push139-test'];
+ const tags=['iec-board-badge:'+ROOT.pathname+':snapshot','iec-push139-update','iec-push139-test','iec-push139-settings'];
  const shown=await self.registration.getNotifications();
  shown.filter(notification=>tags.includes(notification.tag)).forEach(notification=>notification.close());
 }
@@ -89,14 +89,19 @@ self.addEventListener('message',event=>{
    if(event.data.type==='badge-stateB1'){
     const data=event.data;
     if(!validTotalsB1_(data)||!Number.isFinite(data.at)||data.at>Date.now()+60000||data.at<Date.now()-10*60*1000)throw new Error('counts');
-    const old=await pushState139_()||{channel:'',sequence:0,totals:null};
+    let old=null,readable=true,persisted=true;
+    try{old=await pushState139_();}catch(e){readable=false;persisted=false;}
+    old=old||{channel:'',sequence:0,totals:null};
+    if(data.expectedSequence!=null&&(!Number.isSafeInteger(data.expectedSequence)||!readable||data.expectedSequence!==old.sequence)){port.postMessage({ok:true,ignored:true});return;}
     // Serialize foreground reads with pushes; an older tab must not overwrite
     // a more recent snapshot. Only aggregate counts are persisted.
-    if(data.at<(old.totalsAt||0)){port.postMessage({ok:true});return;}
+    if(data.at<(old.totalsAt||0)){port.postMessage({ok:true,ignored:true});return;}
     old.totals={unread:data.unread,actions:data.actions,total:data.total,routeP015:{view:'inbox'}};old.totalsAt=data.at;
-    await pushState139_(old);
+    // The OS notification must clear even if count-history storage fails.
+    // Never overwrite the subscription channel after a failed storage read.
+    if(readable){try{await pushState139_(old);}catch(e){persisted=false;}}
     if(data.total===0)await clearReadNotificationsB1_();
-    await applyBadgeB1_(data.total);port.postMessage({ok:true});return;
+    await applyBadgeB1_(data.total);port.postMessage({ok:true,persisted:persisted});return;
    }
    const channel=event.data.channel;if(channel!==''&&!/^[a-f0-9]{32}$/.test(channel))throw new Error('channel');
    const old=await pushState139_();if(!old||old.channel!==channel)await pushState139_({channel:channel,sequence:0,totals:null});port.postMessage({ok:true});
@@ -128,6 +133,12 @@ self.addEventListener('push',event=>{
    silent:!!duplicate||!!older||(data.sound218?!soundAllowed218_(data.sound218):data.silent218===true),renotify:!duplicate&&!older,data:{push139:true,routeP015:noticeRouteP015_(totals.routeP015)}
   });
   if(!data.test){try{await applyBadgeB1_(totals.total);}catch(e){}}
+  // A delayed push still has to display a notification. If the app is open,
+  // let its verified zero reconcile it; guard against a newer intervening push.
+  if(!data.test&&(duplicate||older)&&totals.total===0){try{
+   const windows=await self.clients.matchAll({type:'window',includeUncontrolled:true});
+   windows.forEach(client=>{const url=new URL(client.url);if(client.visibilityState==='visible'&&url.origin===ROOT.origin&&[ROOT.pathname,ROOT.pathname+'index.html'].includes(url.pathname))client.postMessage({type:'badge-recheckB2',sequence:stored.sequence});});
+  }catch(e){}}
  }));
 });
 
