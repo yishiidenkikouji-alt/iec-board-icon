@@ -5,7 +5,7 @@
   'use strict';
   const APP='iec-board-badge', PROTOCOL=1;
   const URL_KEY='iec.board.pwa.gasUrl.v1';
-  const VERSION='2026.11.06-B2';
+  const VERSION='2026.11.06-B3';
   const ENTRY=new URL('./',window.location.href);
   const NOTIFY_KEY='iec.board.pwa.notifications:'+ENTRY.pathname;
   const NOTIFY_TAG=APP+':'+ENTRY.pathname+':snapshot';
@@ -304,6 +304,7 @@
     else if(state.status==='ready'&&!stale())applyActual();
     else notice(env.mode==='notification'?'通知許可を確認しました。「実機で通知を試す」→「テスト通知を1件表示」で確認してください。GAS接続後は取得した件数を通知本文に表示します。':'通知許可を確認しました。まだ実件数を取得できていません。「件数を更新」または「試験で1を表示」で確認してください。');
   }
+  let connectionGenerationD3=0;
   function configureFrame(url){
     state.gasUrl=url;state.source=null;state.origin='';state.pageId='';state.session='';state.sequence=0;
     state.count=null;state.unread=null;state.actions=null;state.complete=false;state.status='waiting';state.updatedAt=0;state.receivedAt=0;state.loadStarted=Date.now();
@@ -348,10 +349,16 @@
     if(state.status==='ready'&&!stale())applyActual();else queueBadge(0);
     if(state.source)send('refresh');render();
   };
-  el('connectionForm').onsubmit=event=>{
+  el('connectionForm').onsubmit=async event=>{
     event.preventDefault();const url=normaliseUrl(el('gasUrl').value);
     if(!url){notice('script.google.comのウェブアプリURL（末尾 /exec）を入力してください。/dev や編集画面のURLは使用できません。');return;}
-    try{localStorage.setItem(URL_KEY,url);try{if(window.IecConnectionDiagnosticsD1)window.IecConnectionDiagnosticsD1.connection(localStorage.getItem(URL_KEY)===url);}catch(ignore){}}catch(e){try{if(window.IecConnectionDiagnosticsD1)window.IecConnectionDiagnosticsD1.connection(false);}catch(ignore){}notice('接続先を端末に保存できません。この画面を閉じると再入力が必要です。');}
+    const generation=++connectionGenerationD3;
+    try{
+      if(window.IecDeviceStorageD3)await window.IecDeviceStorageD3.saveConnection(url);
+      else {localStorage.setItem(URL_KEY,url);if(localStorage.getItem(URL_KEY)!==url)throw new Error('storage');}
+      try{if(window.IecConnectionDiagnosticsD1)window.IecConnectionDiagnosticsD1.connection(true);}catch(ignore){}
+    }catch(e){try{if(window.IecConnectionDiagnosticsD1)window.IecConnectionDiagnosticsD1.connection(false);}catch(ignore){}notice('接続先を端末に保存できません。この画面を閉じると再入力が必要です。');}
+    if(generation!==connectionGenerationD3)return;
     state.testing=false;queueBadge(0);configureFrame(url);closeSettings();
   };
   el('reloadBoardButton').onclick=()=>{if(state.gasUrl){configureFrame(state.gasUrl);closeSettings();}};
@@ -373,9 +380,15 @@
   }
   if(window.top!==window){el('startStatus').textContent='この入口は直接開いてください。';render();return;}
   let saved='';try{saved=localStorage.getItem(URL_KEY)||'';state.notifyEnabled=localStorage.getItem(NOTIFY_KEY)==='1';}catch(e){}
-  const url=normaliseUrl(saved)||normaliseUrl((window.IEC_PWA_CONFIG||{}).gasUrl);
-  if(url)configureFrame(url);
-  else {el('startStatus').textContent='接続先の /exec URLを「接続先設定」で登録してください。バッジ単独の実機試験は、接続前でも実行できます。';render();}
+  async function startConnectionD3(){
+    const generation=connectionGenerationD3;
+    let url=normaliseUrl(saved)||normaliseUrl((window.IEC_PWA_CONFIG||{}).gasUrl);
+    try{if(window.IecDeviceStorageD3)url=await window.IecDeviceStorageD3.connection();}catch(ignore){}
+    if(generation!==connectionGenerationD3)return;
+    if(url)configureFrame(url);
+    else {el('startStatus').textContent='接続先の /exec URLを「接続先設定」で登録してください。';render();}
+  }
+  void startConnectionD3();
   void registerWorker();
 })();
 

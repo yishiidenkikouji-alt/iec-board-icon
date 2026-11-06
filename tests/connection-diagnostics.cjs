@@ -1,4 +1,5 @@
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict'),{webcrypto}=require('node:crypto');
+const tick=()=>new Promise(resolve=>setImmediate(resolve));
 const dir=__dirname+'/../board-pwa/',ORIGIN='https://yishiidenkikouji-alt.github.io',ROOT=ORIGIN+'/iec-board-icon/board-pwa/';
 const URL_KEY='iec.board.pwa.gasUrl.v1',TEST_KEY='iec.entry.diagnostic.v1:/iec-board-icon/board-pwa/';
 const url='https://script.google.com/macros/s/AKfycbyDl12j_i0NvCN45tSVgM0ngzAWE73hpuz69Mm9MMRQT_gZkrNJXgJNlGqAee-YG_7c/exec';
@@ -33,9 +34,9 @@ function env(map=new Map(),options={}){
  function text(){return descendants(body).find(e=>e.tagName==='textarea').value;}
  function click(label){return descendants(body).find(e=>e.textContent===label&&e.tagName==='button').onclick();}
  run('connection-diagnostics.js');
- return {ctx,run,elements,frame,replies,open,text,click,map,writes,message(d,origin='https://script.google.com',source=frame.contentWindow){for(const fn of events.message||[])fn({data:d,origin,source});}};
+ return {ctx,run,elements,frame,replies,open,text,click,map,writes,message(d,origin='https://script.google.com',source=frame.contentWindow){for(const fn of events.message||[])fn({data:d,origin,source});return tick();}};
 }
-(async()=>{
+async function main(){
  let e=env();assert.match(e.open(),/接続先の端末保存：なし/);assert.equal(e.writes.length,0);assert.equal(e.elements.entryBar.children.length,1);
  e.click('保存テスト');assert.deepEqual(e.writes,[TEST_KEY]);assert.match(e.text(),/書き込み・読み戻し成功/);const marker=e.map.get(TEST_KEY);
  e=env(e.map);assert.match(e.open().split('【現在】')[0],/保存テストの記録：\d{4}-/);assert.equal(e.map.get(TEST_KEY),marker);assert.equal(e.writes.length,0);
@@ -47,28 +48,30 @@ function env(map=new Map(),options={}){
  // Existing resume protocol, exercising real origin/source/nonce/revision validation.
  e=env(new Map([[URL_KEY,url],[key,stored]]));e.run('entry-session.js');e.frame.src=url;e.open();
  let nonce=new URL(e.frame.src).searchParams.get('iec_resume_nonce'),page='d'.repeat(32),base={app:'iec-device-resume-v1',nonce,page};
- e.message({...base,type:'hello'},'https://evil.example');e.message({...base,type:'hello',nonce:'e'.repeat(64)});e.message({...base,type:'hello'},'https://script.google.com',{});assert.equal(e.replies.length,0);
- e.message({...base,type:'hello'});assert.equal(e.replies.at(-1).d.ticket,ticket);assert.match(e.text(),/保存データをGASへ渡しました/);
- e.message({...base,type:'save',seq:1,requestId:'1',expectedRevision:revision,ticket});assert.equal(e.replies.at(-1).d.ok,true);assert.match(e.text(),/保存・読み戻し成功/);const updated=JSON.parse(e.map.get(key));assert.notEqual(updated.revision,revision);
- e.message({...base,type:'save',seq:2,requestId:'2',expectedRevision:revision,ticket});assert.equal(e.replies.at(-1).d.reason,'conflict');assert.match(e.text(),/競合/);assert.deepEqual(JSON.parse(e.map.get(key)),updated);
- e.message({...base,type:'remove',seq:3,requestId:'3',expectedRevision:updated.revision});assert.equal(e.replies.at(-1).d.ok,true);assert.match(e.text(),/GASの要求で/);assert.equal(e.map.has(key),false);
- e=env(new Map([[URL_KEY,url],[key,stored]]),{readFail:true});e.run('entry-session.js');e.frame.src=url;e.open();nonce=new URL(e.frame.src).searchParams.get('iec_resume_nonce');e.message({...base,nonce,type:'hello'});assert.equal(e.replies.at(-1).d.ticket,'');assert.match(e.text(),/保存データを読み出せません/);
+ await e.message({...base,type:'hello'},'https://evil.example');await e.message({...base,type:'hello',nonce:'e'.repeat(64)});await e.message({...base,type:'hello'},'https://script.google.com',{});assert.equal(e.replies.length,0);
+ await e.message({...base,type:'hello'});assert.equal(e.replies.at(-1).d.ticket,ticket);assert.match(e.text(),/保存データをGASへ渡しました/);
+ await e.message({...base,type:'save',seq:1,requestId:'1',expectedRevision:revision,ticket});assert.equal(e.replies.at(-1).d.ok,true);assert.match(e.text(),/保存・読み戻し成功/);const updated=JSON.parse(e.map.get(key));assert.notEqual(updated.revision,revision);
+ await e.message({...base,type:'save',seq:2,requestId:'2',expectedRevision:revision,ticket});assert.equal(e.replies.at(-1).d.reason,'conflict');assert.match(e.text(),/競合/);assert.deepEqual(JSON.parse(e.map.get(key)),updated);
+ await e.message({...base,type:'remove',seq:3,requestId:'3',expectedRevision:updated.revision});assert.equal(e.replies.at(-1).d.ok,true);assert.match(e.text(),/GASの要求で/);assert.equal(JSON.parse(e.map.get(key)).removed,true);
+ e=env(new Map([[URL_KEY,url],[key,stored]]),{readFail:true});e.run('entry-session.js');e.frame.src=url;e.open();nonce=new URL(e.frame.src).searchParams.get('iec_resume_nonce');await e.message({...base,nonce,type:'hello'});assert.equal(e.replies.at(-1).d.ticket,'');assert.match(e.text(),/保存データを読み出せません/);
  // The complete app initializes without diagnostics prerequisites and preserves routing.
- e=env();e.run('entry-session.js');e.run('app.js');e.open();e.ctx.document.getElementById('gasUrl').value=url;e.elements.connectionForm.onsubmit({preventDefault(){}});assert.equal(e.map.get(URL_KEY),url);assert.match(e.text(),/接続先の保存操作：保存・読み戻し成功/);assert.equal(new URL(e.frame.src).pathname,new URL(url).pathname);
- e=env(new Map(),{writeFail:true});e.run('entry-session.js');e.run('app.js');e.open();e.ctx.document.getElementById('gasUrl').value=url;e.elements.connectionForm.onsubmit({preventDefault(){}});assert.match(e.text(),/接続先の保存操作：保存または読み戻しに失敗/);assert.equal(e.map.size,0);
+ e=env();e.run('entry-session.js');e.run('app.js');e.open();e.ctx.document.getElementById('gasUrl').value=url;await e.elements.connectionForm.onsubmit({preventDefault(){}});assert.equal(e.map.get(URL_KEY),url);assert.match(e.text(),/接続先の保存操作：保存・読み戻し成功/);assert.equal(new URL(e.frame.src).pathname,new URL(url).pathname);
+ e=env(new Map(),{writeFail:true});e.run('entry-session.js');e.run('app.js');e.open();e.ctx.document.getElementById('gasUrl').value=url;await e.elements.connectionForm.onsubmit({preventDefault(){}});assert.match(e.text(),/接続先の保存操作：保存または読み戻しに失敗/);assert.equal(e.map.size,0);
  // Diagnostics missing / broken cannot block normal authentication.
- e=env(new Map([[URL_KEY,url],[key,stored]]));delete e.ctx.IecConnectionDiagnosticsD1;e.run('entry-session.js');e.frame.src=url;nonce=new URL(e.frame.src).searchParams.get('iec_resume_nonce');e.message({...base,nonce,type:'hello'});assert.equal(e.replies.at(-1).d.ticket,ticket);
- e=env(new Map([[URL_KEY,url],[key,stored]]));e.ctx.IecConnectionDiagnosticsD1={session(){throw Error('broken UI');}};e.run('entry-session.js');e.frame.src=url;nonce=new URL(e.frame.src).searchParams.get('iec_resume_nonce');e.message({...base,nonce,type:'hello'});assert.equal(e.replies.at(-1).d.ticket,ticket);
- const html=fs.readFileSync(dir+'index.html','utf8'),sw=fs.readFileSync(dir+'sw.js','utf8');assert.ok(html.indexOf('connection-diagnostics.js')<html.indexOf('entry-session.js'));assert.ok(sw.includes("'./connection-diagnostics.js'"));assert.ok(sw.includes('v44-b2-notification-resume'));
+ e=env(new Map([[URL_KEY,url],[key,stored]]));delete e.ctx.IecConnectionDiagnosticsD1;e.run('entry-session.js');e.frame.src=url;nonce=new URL(e.frame.src).searchParams.get('iec_resume_nonce');await e.message({...base,nonce,type:'hello'});assert.equal(e.replies.at(-1).d.ticket,ticket);
+ e=env(new Map([[URL_KEY,url],[key,stored]]));e.ctx.IecConnectionDiagnosticsD1={session(){throw Error('broken UI');}};e.run('entry-session.js');e.frame.src=url;nonce=new URL(e.frame.src).searchParams.get('iec_resume_nonce');await e.message({...base,nonce,type:'hello'});assert.equal(e.replies.at(-1).d.ticket,ticket);
+ const html=fs.readFileSync(dir+'index.html','utf8'),sw=fs.readFileSync(dir+'sw.js','utf8');assert.ok(html.indexOf('connection-diagnostics.js')<html.indexOf('entry-session.js'));assert.ok(sw.includes("'./connection-diagnostics.js'"));assert.ok(sw.includes('v45-d3-device-retention'));
  
  // Registration overlay is inside GAS; diagnostic launcher belongs to the parent body.
  e=env();e.run('entry-session.js');e.run('app.js');e.elements.entryBar.hidden=true;
- let launcher=e.ctx.document.body.children.find(n=>n.id==='connectionDiagnosticLauncherD2');
+ let launcher=e.ctx.document.body.children.find(n=>n.id==='connectionDiagnosticLauncherD3');
  assert.ok(launcher);assert.equal(launcher.parentNode,e.ctx.document.body);assert.equal(launcher.hidden,false);
- launcher.onclick();assert.match(e.text(),/接続診断 2026.10.29-D2/);
+ launcher.onclick();assert.match(e.text(),/接続診断 2026.11.06-D3/);
  e.ctx.IecConnectionDiagnosticsD1.bridge('ready');assert.equal(launcher.hidden,true);
  for(const status of ['no-user','reset','waiting','unavailable']){e.ctx.IecConnectionDiagnosticsD1.bridge(status);assert.equal(launcher.hidden,false);}
  e.ctx.IecConnectionDiagnosticsD1.bridge('ready');e.ctx.IecConnectionDiagnosticsD1.bridge('untrusted');assert.equal(launcher.hidden,true);
- console.log('PASS: D2 launcher outside hidden GAS/header, bridge visibility,  startup/current states, persistence marker across reload, denied/dropped storage, malformed data, redaction/copy, resume protocol origin/nonce/source/conflict/save/remove, real app submit, missing/broken diagnostics isolation, SW inclusion.');
-})().catch(e=>{console.error(e);process.exit(1);});
+ console.log('PASS: D3 launcher outside hidden GAS/header, bridge visibility,  startup/current states, persistence marker across reload, denied/dropped storage, malformed data, redaction/copy, resume protocol origin/nonce/source/conflict/save/remove, real app submit, missing/broken diagnostics isolation, SW inclusion.');
+}
+module.exports={env,url,key,ticket,revision,stored,URL_KEY,TEST_KEY,ROOT,tick};
+if(require.main===module)main().catch(e=>{console.error(e);process.exit(1);});
 
