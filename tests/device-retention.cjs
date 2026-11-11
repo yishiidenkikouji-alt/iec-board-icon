@@ -102,7 +102,8 @@ async function hello(e){
     await assert.rejects(e.store.readTicket(key));assert.equal(e.map.get(key),stored);
   }
   const html=fs.readFileSync(__dirname+'/../board-pwa/index.html','utf8');
-  assert.ok(html.indexOf('entry-session.js')<html.indexOf('app.js'));
-  assert.ok(fs.readFileSync(__dirname+'/../board-pwa/sw.js','utf8').includes('v45-d3-device-retention'));
+  assert.ok(html.indexOf('config.js')<html.indexOf('entry-startup.js'));
+  const bundle=fs.readFileSync(__dirname+'/../board-pwa/entry-startup.js','utf8');assert.ok(bundle.indexOf('/* entry-session.js */')<bundle.indexOf('/* app.js */'));
+  assert.ok(fs.readFileSync(__dirname+'/../board-pwa/sw.js','utf8').includes('v46-d4-entry-startup'));
   console.log('PASS: D3 migration/restart after local loss; common and custom endpoint recovery; committed ACK; cross-tab CAS; tombstones; storage failure/timeout; origin isolation; navigation races; private diagnostic redaction; persistence grant/denial; B3 startup change precedence.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

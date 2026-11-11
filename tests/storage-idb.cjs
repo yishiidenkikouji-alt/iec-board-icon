@@ -2,19 +2,23 @@
 // readwrite transactions serialize across connections and publish only at commit.
 const {setImmediate}=require('node:timers');
 module.exports=function database(options={}){
-  const records=new Map(),queue=[];let active=false,created=false;
+  const records=new Map(),queue=[],stats={transactions:[],puts:0,opens:0};let active=false,created=false;
   function schedule(){if(active||!queue.length)return;active=true;queue.shift()();}
-  function transaction(){
+  function transaction(storeName,mode,settings){
+    if(!['readonly','readwrite'].includes(mode))throw Error('transaction mode');
+    stats.transactions.push({mode,settings});
     let stopped=false,started=false,pending=0,snapshot;const operations=[];
     const tx={error:null,abort(){if(stopped)return;stopped=true;setImmediate(()=>{if(tx.onabort)tx.onabort();if(started){active=false;schedule();}});},objectStore(){return {
       get:key=>request('get',key),put:(value,key)=>request('put',key,value)
     };}};
     function check(){setImmediate(()=>{
       if(stopped||pending)return;
-      stopped=true;records.clear();for(const [key,value] of snapshot)records.set(key,value);
+      stopped=true;if(mode==='readwrite'){records.clear();for(const [key,value] of snapshot)records.set(key,value);}
+      if(options.afterCommit)options.afterCommit({mode,records});
       if(tx.oncomplete)tx.oncomplete();active=false;schedule();
     });}
     function request(kind,key,value){
+      if(kind==='put'){if(mode==='readonly')throw Error('ReadOnlyError');stats.puts++;}
       const r={};pending++;
       function run(){setImmediate(()=>{
         if(stopped)return;
@@ -31,6 +35,7 @@ module.exports=function database(options={}){
     setImmediate(schedule);return tx;
   }
   const api={open(){
+    stats.opens++;
     const r={};if(options.hangOpen)return r;
     setImmediate(()=>{
       if(options.openFail){r.error=Error('private open failure');r.onerror();return;}
@@ -40,5 +45,5 @@ module.exports=function database(options={}){
       r.onsuccess();
     });return r;
   }};
-  return {api,records,options};
+  return {api,records,options,stats};
 };

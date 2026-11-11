@@ -5,7 +5,7 @@
   'use strict';
   const APP='iec-board-badge', PROTOCOL=1;
   const URL_KEY='iec.board.pwa.gasUrl.v1';
-  const VERSION='2026.11.06-B3';
+  const VERSION='2026.11.11-D4';
   const ENTRY=new URL('./',window.location.href);
   const NOTIFY_KEY='iec.board.pwa.notifications:'+ENTRY.pathname;
   const NOTIFY_TAG=APP+':'+ENTRY.pathname+':snapshot';
@@ -305,6 +305,7 @@
     else notice(env.mode==='notification'?'通知許可を確認しました。「実機で通知を試す」→「テスト通知を1件表示」で確認してください。GAS接続後は取得した件数を通知本文に表示します。':'通知許可を確認しました。まだ実件数を取得できていません。「件数を更新」または「試験で1を表示」で確認してください。');
   }
   let connectionGenerationD3=0;
+  function launchTimingD4(code){try{if(window.IecConnectionDiagnosticsD1&&window.IecConnectionDiagnosticsD1.launch)window.IecConnectionDiagnosticsD1.launch(code);}catch(ignore){}}
   function configureFrame(url){
     state.gasUrl=url;state.source=null;state.origin='';state.pageId='';state.session='';state.sequence=0;
     state.count=null;state.unread=null;state.actions=null;state.complete=false;state.status='waiting';state.updatedAt=0;state.receivedAt=0;state.loadStarted=Date.now();
@@ -382,9 +383,11 @@
   let saved='';try{saved=localStorage.getItem(URL_KEY)||'';state.notifyEnabled=localStorage.getItem(NOTIFY_KEY)==='1';}catch(e){}
   async function startConnectionD3(){
     const generation=connectionGenerationD3;
+    launchTimingD4('connection-start');
     let url=normaliseUrl(saved)||normaliseUrl((window.IEC_PWA_CONFIG||{}).gasUrl);
     try{if(window.IecDeviceStorageD3)url=await window.IecDeviceStorageD3.connection();}catch(ignore){}
     if(generation!==connectionGenerationD3)return;
+    launchTimingD4('connection-ready');
     if(url)configureFrame(url);
     else {el('startStatus').textContent='接続先の /exec URLを「接続先設定」で登録してください。';render();}
   }

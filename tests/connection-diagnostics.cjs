@@ -23,7 +23,7 @@ function env(map=new Map(),options={}){
  }
  class Frame extends Element{get src(){return this._src;}set src(x){this._src=String(x);}}
  const frame=elements.boardFrame=new Frame();const replies=[];frame.contentWindow={postMessage:(d,o)=>replies.push({d,o})};
- const body=new Element('body'),doc={body,activeElement:null,hidden:false,getElementById(id){return elements[id]??(elements[id]=new Element());},createElement(t){return new Element(t);},addEventListener(k,fn){events['document:'+k]=fn;}};
+ const body=new Element('body'),doc={body,activeElement:null,hidden:false,getElementById(id){return elements[id]??(elements[id]=new Element());},createElement(t){return new Element(t);},addEventListener(k,fn){(events['document:'+k]??=[]).push(fn);}};
  elements.sheetBackdrop=new Element();elements.sheetBackdrop.hidden=true;
  const storage={getItem(k){if(options.readFail)throw Error('private raw text');return map.has(k)?map.get(k):null;},setItem(k,v){if(options.writeFail)throw Error('secret error');writes.push(k);if(!options.dropWrites)map.set(k,String(v));},removeItem(k){if(options.writeFail)throw Error('secret error');writes.push(k);map.delete(k);},get length(){if(options.readFail)throw Error('read');return map.size;},key(i){return [...map.keys()][i]??null;}};
  ctx={URL,URLSearchParams,crypto:webcrypto,console,Uint8Array,Uint32Array,HTMLIFrameElement:Frame,localStorage:storage,document:doc,location:new URL(ROOT+'?installed=1#private'),navigator:{userAgent:'Mozilla/5.0 (Linux; Android 14) Chrome/130.0.0.0',onLine:true,clipboard:{writeText:async t=>{ctx.copied=t;}}},IEC_PWA_CONFIG:{gasUrl:options.config||''},matchMedia:()=>({matches:true}),setTimeout:()=>1,clearTimeout(){},setInterval(){},requestAnimationFrame:fn=>fn(),MutationObserver:class{observe(){}},Event:class{constructor(type){this.type=type;}},history:{replaceState(){}},isSecureContext:true,addEventListener(k,fn){(events[k]??=[]).push(fn);},dispatchEvent(e){for(const fn of events[e.type]||[])fn(e);}};
@@ -33,8 +33,8 @@ function env(map=new Map(),options={}){
  function open(){elements.entryBar.children.find(x=>x.textContent==='接続診断').onclick();return text();}
  function text(){return descendants(body).find(e=>e.tagName==='textarea').value;}
  function click(label){return descendants(body).find(e=>e.textContent===label&&e.tagName==='button').onclick();}
- run('connection-diagnostics.js');
- return {ctx,run,elements,frame,replies,open,text,click,map,writes,message(d,origin='https://script.google.com',source=frame.contentWindow){for(const fn of events.message||[])fn({data:d,origin,source});return tick();}};
+ if(!options.skipDiagnostics)run('connection-diagnostics.js');
+ return {ctx,run,elements,frame,replies,open,text,click,map,writes,events,message(d,origin='https://script.google.com',source=frame.contentWindow){for(const fn of events.message||[])fn({data:d,origin,source});return tick();}};
 }
 async function main(){
  let e=env();assert.match(e.open(),/接続先の端末保存：なし/);assert.equal(e.writes.length,0);assert.equal(e.elements.entryBar.children.length,1);
@@ -60,13 +60,13 @@ async function main(){
  // Diagnostics missing / broken cannot block normal authentication.
  e=env(new Map([[URL_KEY,url],[key,stored]]));delete e.ctx.IecConnectionDiagnosticsD1;e.run('entry-session.js');e.frame.src=url;nonce=new URL(e.frame.src).searchParams.get('iec_resume_nonce');await e.message({...base,nonce,type:'hello'});assert.equal(e.replies.at(-1).d.ticket,ticket);
  e=env(new Map([[URL_KEY,url],[key,stored]]));e.ctx.IecConnectionDiagnosticsD1={session(){throw Error('broken UI');}};e.run('entry-session.js');e.frame.src=url;nonce=new URL(e.frame.src).searchParams.get('iec_resume_nonce');await e.message({...base,nonce,type:'hello'});assert.equal(e.replies.at(-1).d.ticket,ticket);
- const html=fs.readFileSync(dir+'index.html','utf8'),sw=fs.readFileSync(dir+'sw.js','utf8');assert.ok(html.indexOf('connection-diagnostics.js')<html.indexOf('entry-session.js'));assert.ok(sw.includes("'./connection-diagnostics.js'"));assert.ok(sw.includes('v45-d3-device-retention'));
+ const html=fs.readFileSync(dir+'index.html','utf8'),sw=fs.readFileSync(dir+'sw.js','utf8');assert.ok(html.includes('entry-startup.js'));const bundle=fs.readFileSync(dir+'entry-startup.js','utf8');assert.ok(bundle.indexOf('/* connection-diagnostics.js */')<bundle.indexOf('/* entry-session.js */'));assert.ok(sw.includes("'./connection-diagnostics.js'"));assert.ok(sw.includes('v46-d4-entry-startup'));
  
  // Registration overlay is inside GAS; diagnostic launcher belongs to the parent body.
  e=env();e.run('entry-session.js');e.run('app.js');e.elements.entryBar.hidden=true;
  let launcher=e.ctx.document.body.children.find(n=>n.id==='connectionDiagnosticLauncherD3');
  assert.ok(launcher);assert.equal(launcher.parentNode,e.ctx.document.body);assert.equal(launcher.hidden,false);
- launcher.onclick();assert.match(e.text(),/接続診断 2026.11.06-D3/);
+ launcher.onclick();assert.match(e.text(),/接続診断 2026.11.11-D4/);
  e.ctx.IecConnectionDiagnosticsD1.bridge('ready');assert.equal(launcher.hidden,true);
  for(const status of ['no-user','reset','waiting','unavailable']){e.ctx.IecConnectionDiagnosticsD1.bridge(status);assert.equal(launcher.hidden,false);}
  e.ctx.IecConnectionDiagnosticsD1.bridge('ready');e.ctx.IecConnectionDiagnosticsD1.bridge('untrusted');assert.equal(launcher.hidden,true);
