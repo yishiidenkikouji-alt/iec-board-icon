@@ -104,6 +104,6 @@ async function hello(e){
   const html=fs.readFileSync(__dirname+'/../board-pwa/index.html','utf8');
   assert.ok(html.indexOf('config.js')<html.indexOf('entry-startup.js'));
   const bundle=fs.readFileSync(__dirname+'/../board-pwa/entry-startup.js','utf8');assert.ok(bundle.indexOf('/* entry-session.js */')<bundle.indexOf('/* app.js */'));
-  assert.ok(fs.readFileSync(__dirname+'/../board-pwa/sw.js','utf8').includes('v46-d4-entry-startup'));
+  assert.ok(fs.readFileSync(__dirname+'/../board-pwa/sw.js','utf8').includes('v47-d5-entry-timing'));
   console.log('PASS: D3 migration/restart after local loss; common and custom endpoint recovery; committed ACK; cross-tab CAS; tombstones; storage failure/timeout; origin isolation; navigation races; private diagnostic redaction; persistence grant/denial; B3 startup change precedence.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

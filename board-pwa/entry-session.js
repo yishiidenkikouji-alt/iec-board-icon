@@ -143,7 +143,7 @@
  */
 (function(){
   'use strict';
-  const APP='iec-device-resume-v1', VERSION='2026.11.11-D4';
+  const APP='iec-device-resume-v1', VERSION='2026.11.11-D5';
   const ROOT=new URL('./',location.href), frame=document.getElementById('boardFrame');
   if(!frame||window.top!==window||location.origin!=='https://yishiidenkikouji-alt.github.io'||ROOT.pathname!=='/iec-board-icon/board-pwa/')return;
   const state={nonce:'',page:'',source:null,origin:'',key:'',lastSeq:0,generation:0};
@@ -172,7 +172,7 @@
     launch('frame-start');
     // A short-lived channel nonce, NOT an identity or a login credential.
     url.searchParams.set('iec_resume_nonce',state.nonce);
-    setStatus('端末保持 D4：GASとの連携を確認中…');return url.href;
+    setStatus('端末保持 D5：GASとの連携を確認中…');return url.href;
   }
   // Only this application's iframe is wrapped. The existing badge code and
   // saved /exec URL remain unchanged; native src getter/setter do navigation.
@@ -192,8 +192,8 @@
       const c=context();
       enqueue(async function(){
         if(!c.current())return;
-        try{const saved=await storage().readTicket(c.key,c.current);if(!c.current())return;diagnostic(saved.ticket?'sent':'empty');launch('ticket-ready');reply(c,'ready',{revision:saved.revision,ticket:saved.ticket,version:VERSION});setStatus(saved.ticket?'端末保持 D4：保存した利用者をGASで検証中…':'端末保持 D4：未保存（GASで本人を登録後に保存します）');}
-        catch(e){if(!c.current())return;diagnostic('readError');reply(c,'ready',{revision:'',ticket:'',version:VERSION,error:'端末内の保存情報を読み取れません。情報は消していません。アプリを開き直してください。'});setStatus('端末保持 D4：保存情報を読み取れません（未登録には戻していません）');}
+        try{const saved=await storage().readTicket(c.key,c.current);if(!c.current())return;diagnostic(saved.ticket?'sent':'empty');launch('ticket-ready');let startupTimingD5=null;try{const diag=window.IecConnectionDiagnosticsD1;if(diag&&diag.timingForApp)startupTimingD5=diag.timingForApp();}catch(ignore){}reply(c,'ready',{revision:saved.revision,ticket:saved.ticket,version:VERSION,startupTimingD5:startupTimingD5});setStatus(saved.ticket?'端末保持 D5：保存した利用者をGASで検証中…':'端末保持 D5：未保存（GASで本人を登録後に保存します）');}
+        catch(e){if(!c.current())return;diagnostic('readError');reply(c,'ready',{revision:'',ticket:'',version:VERSION,error:'端末内の保存情報を読み取れません。情報は消していません。アプリを開き直してください。'});setStatus('端末保持 D5：保存情報を読み取れません（未登録には戻していません）');}
       });
       return;
     }
@@ -209,7 +209,7 @@
         const saved=await storage().writeTicket(c.key,request.expectedRevision,request.type==='save'?request.ticket:'',c.current);
         if(!c.current())return;
         ack.revision=saved.revision;ack.ok=true;
-        setStatus(request.type==='save'?'端末保持 D4：この端末に保存確認済み':'端末保持 D4：登録解除済み');
+        setStatus(request.type==='save'?'端末保持 D5：この端末に保存確認済み':'端末保持 D5：登録解除済み');
       }catch(e){ack.reason=e.code==='conflict'?'conflict':'storage';ack.error=String(e&&e.message||'端末への保存に失敗しました。');}
       if(!c.current())return;
       diagnostic(ack.ok?(request.type==='save'?'saved':'removed'):(ack.reason==='conflict'?'conflict':'writeError'));
@@ -218,7 +218,7 @@
   });
   // Deliberately no transmission of tickets in URLs, logs, analytics, or fetch.
   const el=document.getElementById('entrySessionVersion');if(el)el.textContent=VERSION;
-  setStatus('端末保持 D4：接続先の設定を待っています');
+  setStatus('端末保持 D5：接続先の設定を待っています');
 })();
 
 

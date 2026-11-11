@@ -35,7 +35,7 @@ function hello(e){return{app:'iec-device-resume-v1',nonce:new URL(e.frame.src).s
  // validated child messages can finish the Google wait stage.
  db=database();db.records.set(connectionKey,{v:1,url});db.records.set(key,JSON.parse(stored));
  e=client(db,new Map([[URL_KEY,url],[key,stored]]),true);e.at(250);await settle();
- assert.equal(new URL(e.frame.src).pathname,new URL(url).pathname);assert.equal(e.elements.entryVersion.textContent,'2026.11.11-D4');
+ assert.equal(new URL(e.frame.src).pathname,new URL(url).pathname);assert.equal(e.elements.entryVersion.textContent,'2026.11.11-D5');
  assert.match(e.open(),/接続先の端末確認：0.15秒/);assert.match(e.text(),/Google側の画面準備・通信：未計測/);
  e.at(5250);const message=hello(e);
  await e.message(message,'https://evil.example');await e.message({...message,nonce:'0'.repeat(64)});await e.message(message,'https://script.google.com',{});
@@ -43,6 +43,10 @@ function hello(e){return{app:'iec-device-resume-v1',nonce:new URL(e.frame.src).s
  await e.message(message);e.at(5290);await settle();
  assert.equal(e.replies.at(-1).d.ticket,ticket);assert.match(e.open(),/Google側の画面準備・通信：5.00秒/);assert.match(e.text(),/保存情報の読み出し・受け渡し準備：0.04秒/);
  assert.match(e.text(),/保存情報の受け渡し準備完了（入口の読み込みから）：5.29秒/);
+ const projection=JSON.parse(JSON.stringify(e.replies.at(-1).d.startupTimingD5));
+ assert.deepEqual(projection,{version:'D5-ENTRY-1',entryScriptMs:100,connectionCheckMs:150,frameStartMs:250,frameToHelloMs:5000,restoreReadMs:40,ticketReadyMs:5290,attempt:1,background:false});
+ for(const secret of [url,ticket,revision,message.nonce,message.page])assert(!JSON.stringify(projection).includes(secret));
+ projection.ticketReadyMs=1;assert.equal(e.ctx.IecConnectionDiagnosticsD1.timingForApp().ticketReadyMs,5290);
  assert.deepEqual(db.stats.transactions.map(t=>t.mode),['readonly','readonly']);
  const initialReport=e.text();e.at(8000);await e.message(message);await settle();assert.equal(e.open().match(/Google側の画面準備・通信：[^\n]+/)[0],initialReport.match(/Google側の画面準備・通信：[^\n]+/)[0]);
  e.ctx.IecConnectionDiagnosticsD1.launch('untrusted '+ticket);await e.click('結果をコピー');
@@ -54,9 +58,12 @@ function hello(e){return{app:'iec-device-resume-v1',nonce:new URL(e.frame.src).s
 
  // No fake successful handoff time if durable ticket storage cannot be read.
  db=database({readFail:true});e=client(db,new Map([[key,stored]]));e.frame.src=url;await e.message(hello(e));await settle();assert(e.replies.at(-1).d.error);assert.match(e.open(),/保存情報の読み出し・受け渡し準備：未計測/);
+ assert.equal(e.replies.at(-1).d.startupTimingD5,undefined);
+ // The additive timing field may be absent or broken without blocking restore.
+ db=database();db.records.set(key,JSON.parse(stored));e=client(db,new Map([[key,stored]]));e.ctx.IecConnectionDiagnosticsD1={launch(){},session(){},storage(){},timingForApp(){throw Error('timing unavailable')}};e.frame.src=url;await e.message(hello(e));await settle();assert.equal(e.replies.at(-1).d.ticket,ticket);assert.equal(e.replies.at(-1).d.startupTimingD5,null);
  const dir=__dirname+'/../board-pwa/',html=fs.readFileSync(dir+'index.html','utf8'),bundle=fs.readFileSync(dir+'entry-startup.js','utf8');
  assert(html.includes('src="./config.js"'));assert(html.includes('src="./entry-startup.js"'));
  for(const name of ['connection-diagnostics.js','entry-session.js','app.js'])assert(!html.includes('src="./'+name+'"'));
  assert(!bundle.includes('IEC_PWA_CONFIG ='));assert(!bundle.includes('function doGet('));new vm.Script(bundle);
- console.log('PASS D4: routine startup uses 2 read-only / 0 write transactions; no redundant mirror write; migration race/tombstones and strict saves retained; production bundle starts app; validated parent-clock timing, reload/hidden handling, failed read state and redaction.');
+ console.log('PASS D5: routine startup uses 2 read-only / 0 write transactions; no redundant mirror write; migration race/tombstones and strict saves retained; production bundle starts app; validated parent-clock timing, reload/hidden handling, failed read state and redaction.');
 })().catch(error=>{console.error(error);process.exitCode=1});
