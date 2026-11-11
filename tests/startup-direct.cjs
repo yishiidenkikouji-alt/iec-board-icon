@@ -6,7 +6,9 @@ const settle=async()=>{for(let i=0;i<60;i++)await Promise.resolve();};
 async function launch(records=new Map([[KEY,saved]]),options={}){
  const nodes={},events={},posts=[],writes=[],timers=new Map(),created=[],paints=[];let id=0,clock=20;
  function create(tag){
-  const n={tag,children:[],textContent:'',value:'',hidden:false,removed:false,focus(){},select(){},remove(){this.removed=true;},removeAttribute(k){delete this[k];},appendChild(child){this.children.push(child);},submit(){posts.push({action:this.action,method:this.method,enctype:this.enctype,target:this.target,fields:Object.fromEntries(this.children.map(x=>[x.name,x.value]))});}};created.push(n);return n;
+  const listeners={};
+  const n={tag,children:[],textContent:'',value:'',hidden:false,removed:false,focus(){},select(){},remove(){this.removed=true;},removeAttribute(k){delete this[k];},setAttribute(k,v){this[k]=v;},addEventListener:(k,fn)=>(listeners[k]??=[]).push(fn),emit:async(k,e={})=>{for(const fn of listeners[k]||[])await fn(e);await settle();},appendChild(child){this.children.push(child);if(child.tag==='iframe'){nodes[child.id]=child;child.nameAtInsertion=child.name;if(!options.delayFrame)Promise.resolve().then(()=>child.emit('load'));}},submit(){posts.push({action:this.action,method:this.method,enctype:this.enctype,target:this.target,fields:Object.fromEntries(this.children.map(x=>[x.name,x.value]))});}};
+  if(tag==='iframe')n.contentWindow={};created.push(n);return n;
  }
  function node(name){if(!nodes[name]){nodes[name]=create(name);if(name==='trialFrame')nodes[name].contentWindow={};}return nodes[name];}
  const localStorage={getItem:k=>{if(options.readFail)throw Error('PRIVATE_ERROR');return records.get(k)||null;},setItem:(k,v)=>{writes.push(k);records.set(k,v);}};
@@ -20,10 +22,12 @@ async function launch(records=new Map([[KEY,saved]]),options={}){
  const dispatch=async(kind,event)=>{for(const fn of events[kind]||[])await fn(event);await settle();};
  return{ctx,nodes,node,frame,source,posts,writes,created,timers,records,scripts,result,data,dispatch,at:n=>clock=n,report:()=>JSON.parse(node('trialReport').value),message:(d=data(),origin='https://n-example-script.googleusercontent.com',src=source)=>dispatch('message',{origin,source:src,data:d}),paint:async()=>{while(paints.length){paints.shift()();await settle();}}};
 }
-test('current storage sends one body-only POST to the fixed GAS URL, clears token inputs and never writes identity',async()=>{
+test('current storage sends one body-only POST to a prepared receiver and clears form inputs on its load',async()=>{
  const h=await launch(undefined,{query:'&target=https://evil.invalid&ticket=not-a-ticket'});assert.deepEqual(h.scripts,['config.js','entry-session.js','startup-direct.js']);assert.equal(h.posts.length,1);
  const p=h.posts[0];assert.equal(p.action,GAS);assert.equal(p.method,'POST');assert.equal(p.enctype,'application/x-www-form-urlencoded');assert.equal(p.fields.ticket,TICKET);assert.match(p.fields.nonce,/^[a-f0-9]{64}$/);assert.deepEqual(Object.keys(p.fields),['p077','nonce','ticket']);assert.equal(p.target,h.frame.name);
- assert(h.created.filter(n=>n.tag==='input').every(n=>n.value===''));assert(h.created.find(n=>n.tag==='form').removed);assert.equal(h.writes.length,0);assert.equal(h.node('ownCard').hidden,true);assert.equal(h.report().outcome,'verifying');
+ assert.equal(h.report().version,'P077-ENTRY-2');assert.equal(h.frame.nameAtInsertion,p.target);assert.equal(h.frame.hidden,false);assert.equal(h.frame.className,'trial-transport');assert.equal(h.frame['aria-hidden'],'true');assert.equal(h.frame.tabIndex,-1);
+ assert.equal(h.created.find(n=>n.tag==='form').removed,false);assert.equal(h.report().transport.frameReadyMs,20);assert.equal(h.writes.length,0);assert.equal(h.node('ownCard').hidden,true);assert.equal(h.report().outcome,'verifying');
+ h.at(800);await h.frame.emit('load');assert(h.created.filter(n=>n.tag==='input').every(n=>n.value===''));assert(h.created.find(n=>n.tag==='form').removed);assert.equal(h.report().transport.loadsAfterSubmit,1);assert.equal(h.report().transport.lastFrameLoadMs,800);
 });
 test('origin, owned iframe ancestry, nonce and response version all gate the card',async()=>{
  const h=await launch(),good=h.data();
@@ -48,14 +52,35 @@ test('changes to canonical identity while awaiting a response prevent its displa
  }
  const h=await launch();h.records.set('iec.board.pwa.gasUrl.v1',GAS.replace('AKfycby','AKfycba'));await h.message();assert.equal(h.report().outcome,'connection-mismatch');assert(h.node('ownCard').hidden);
 });
-test('background, BFCache, external logout and timeout clear the card and ignore late results without retrying',async()=>{
+test('leaving after success clears the card while preserving the completed anonymous measurement',async()=>{
  for(const event of ['visibilitychange','pagehide','pageshow','storage']){
   const h=await launch();await h.message();await h.paint();assert.equal(h.report().outcome,'success');
   if(event==='visibilitychange')h.ctx.document.hidden=true;
   await h.dispatch(event,event==='pageshow'?{persisted:true}:event==='storage'?{key:KEY}:{});await h.message();await h.paint();
-  assert.notEqual(h.report().outcome,'success');assert(h.node('ownCard').hidden);assert.equal(h.node('cardName').textContent,'');assert.equal(h.posts.length,1);
+  assert.equal(h.report().outcome,event==='storage'?'identity-changed':'success');assert(h.node('ownCard').hidden);assert.equal(h.node('cardName').textContent,'');assert.equal(h.posts.length,1);assert.equal(h.report().background,false);
  }
+});
+test('interruption records its event, time and waiting phase, clears credentials and ignores a late response',async()=>{
+ for(const event of ['visibilitychange','pagehide','pageshow']){
+  const h=await launch();h.at(2750);if(event==='visibilitychange')h.ctx.document.hidden=true;
+  await h.dispatch(event,{persisted:event==='pageshow'});await h.message();await h.paint();
+  const r=h.report();assert.equal(r.outcome,'interrupted');assert.equal(r.background,true);assert.equal(r.interruption.atMs,2750);assert.equal(r.interruption.phase,'waiting-response');assert.equal(r.interruption.reason,event==='pageshow'?'bfcache-restore':event);assert.equal(r.responseMs,null);
+  assert(h.created.filter(n=>n.tag==='input').every(n=>n.value===''));assert(h.created.find(n=>n.tag==='form').removed);assert(h.node('ownCard').hidden);assert.equal(h.posts.length,1);
+ }
+});
+test('timeout clears form credentials and never retries',async()=>{
  const h=await launch();[...h.timers.values()].find(t=>t.ms===60000).fn();await h.message();assert.equal(h.report().outcome,'TIMEOUT');assert(h.node('ownCard').hidden);assert.equal(h.posts.length,1);
+ assert(h.created.filter(n=>n.tag==='input').every(n=>n.value===''));assert(h.created.find(n=>n.tag==='form').removed);
+});
+test('no ticket is read or sent until the named frame is ready; identity is read again after that wait',async()=>{
+ const h=await launch(undefined,{delayFrame:true});assert.equal(h.posts.length,0);assert.equal(h.report().ticketReadyMs,null);assert.equal(h.report().transport.frameReadyMs,null);
+ h.records.set(KEY,JSON.stringify({v:1,revision:'e'.repeat(64),ticket:'',removed:true}));await h.frame.emit('load');assert.equal(h.posts.length,0);assert.equal(h.report().outcome,'ticket-removed');
+ const j=await launch(undefined,{delayFrame:true});j.ctx.document.hidden=true;await j.dispatch('visibilitychange',{});await j.frame.emit('load');assert.equal(j.posts.length,0);assert.equal(j.report().interruption.phase,'preparing');
+});
+test('policy blocking and mismatched replies are recorded without reflecting raw data',async()=>{
+ const h=await launch();await h.message({...h.data(),nonce:'PRIVATE_NONCE',version:'PRIVATE_VERSION'});assert.equal(h.report().transport.replyMessages,1);assert.equal(h.report().transport.replyVersion,'different');assert.equal(h.report().transport.replyNonce,'different');assert.equal(h.report().responseMs,null);
+ await h.dispatch('securitypolicyviolation',{effectiveDirective:'form-action',blockedURI:'https://private.invalid/?secret=PRIVATE_URI'});assert.equal(h.report().outcome,'BROWSER_BLOCKED');assert.equal(h.report().transport.blockedDirective,'form-action');
+ for(const value of ['PRIVATE_NONCE','PRIVATE_VERSION','PRIVATE_URI'])assert(!JSON.stringify(h.report()).includes(value));assert(h.node('ownCard').hidden);
 });
 test('failed, malformed and oversized responses fail closed',async()=>{
  for(const mutate of [r=>{r.ok=false;r.code='ACCESS_DENIED'},r=>{r.card.name=''},r=>{r.card.place='x'.repeat(3001)},r=>{r.card=null}]){
@@ -64,6 +89,7 @@ test('failed, malformed and oversized responses fail closed',async()=>{
 });
 test('opt-in pages stay under the installed app scope and outside the service-worker cache',()=>{
  const html=fs.readFileSync(path.join(dir,'startup-direct.html'),'utf8');assert(html.includes('form-action https://script.google.com'));assert(!html.includes('unsafe-inline'));
+ assert(!html.includes('<iframe'));const css=fs.readFileSync(path.join(dir,'startup-direct.css'),'utf8');assert(css.includes('.trial-transport{display:block;'));assert(!css.includes('iframe,[hidden]'));
  const sw=fs.readFileSync(path.join(dir,'sw.js'),'utf8');assert(!sw.includes('startup-direct'));
  const manifest=JSON.parse(fs.readFileSync(path.join(dir,'manifest.webmanifest'),'utf8'));assert(new URL('startup-direct.html',ROOT).href.startsWith(new URL(manifest.scope,ROOT).href));
 });
