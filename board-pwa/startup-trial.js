@@ -11,7 +11,28 @@
  const APP='iec-startup-trial-p076',frame=document.getElementById('trialFrame'),status=document.getElementById('trialStatus'),output=document.getElementById('trialReport');
  const nonce=Array.from(crypto.getRandomValues(new Uint8Array(32)),v=>v.toString(16).padStart(2,'0')).join('');
  let active=true,page='',reading=false,sent=false,deadline=null;
- const report={version:'P076-ENTRY-1',at:new Date().toISOString(),entryScriptMs:Math.round(performance.now()),connectionReadyMs:null,frameStartMs:null,appHelloMs:null,ticketReadyMs:null,totalToCardMs:null,outcome:'preparing',background:!!document.hidden,timing:null};
+ const report={version:'P076-ENTRY-2',at:new Date().toISOString(),entryScriptMs:Math.round(performance.now()),connectionReadyMs:null,frameStartMs:null,appHelloMs:null,ticketReadyMs:null,totalToCardMs:null,outcome:'preparing',background:!!document.hidden,timing:null,entryCheck:{mode:'browser',storageModule:false,commonConfig:'missing',connection:'unchecked',ticket:'unchecked',errorCode:''}};
+ try{if(navigator.standalone===true||(window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches))report.entryCheck.mode='standalone';}catch(ignore){}
+ const SAME_APP_HELP='いつものホーム画面アプリを開き、［設定］→［通知・バッジ設定］→［通知設定・テストを開く］→［起動速度を試す］から開いてください。';
+ function entryError(code){const e=new Error('entry check');e.entryCode=code;return e;}
+ function recordError(error){if(['format','storage','blocked','timeout','navigation','key'].includes(error&&error.code))report.entryCheck.errorCode=error.code;}
+ async function checkConnection(){
+  const store=window.IecDeviceStorageD3;
+  report.entryCheck.storageModule=!!(store&&typeof store.connection==='function'&&typeof store.readTicket==='function');
+  const common=(window.IEC_PWA_CONFIG||{}).gasUrl;report.entryCheck.commonConfig=common===GAS_URL?'matched':common?'different':'missing';
+  if(!report.entryCheck.storageModule)throw entryError('storage-module-unavailable');
+  let url;try{url=await store.connection();}catch(error){recordError(error);report.entryCheck.connection='read-error';throw entryError('connection-read-failed');}
+  if(!current())throw entryError('interrupted');
+  report.entryCheck.connection=!url?'missing':url===GAS_URL?'matched':'different';
+  if(!url)throw entryError('connection-missing');if(url!==GAS_URL)throw entryError('connection-mismatch');
+  return store;
+ }
+ function entryFailure(error){
+  recordError(error);
+  const code=['storage-module-unavailable','connection-read-failed','connection-missing','connection-mismatch','ticket-missing','ticket-removed','ticket-read-failed','ticket-format'].includes(error&&error.entryCode)?error.entryCode:'entry-unavailable';
+  const lead=code==='ticket-missing'?'この画面には保存済みの本人確認情報がありません。':code==='ticket-removed'?'この画面の登録は解除されています。':code==='connection-mismatch'?'この画面の接続先は、今回の試作対象と異なります。':code==='connection-missing'?'この画面で接続先を確認できません。':'この画面で保存情報を読み出せませんでした。';
+  fail(code,lead+' '+SAME_APP_HELP);
+ }
  function refresh(){output.value=JSON.stringify(report,null,2);}
  function fail(code,message){report.outcome=code;status.textContent=message;active=false;clearTimeout(deadline);frame.hidden=true;frame.removeAttribute('src');refresh();}
  function current(){return active&&!document.hidden;}
@@ -22,15 +43,17 @@
   if(d.type==='hello'){
    if(sent||reading||page&&page!==d.page)return;page=d.page;reading=true;report.appHelloMs=Math.round(performance.now());
    try{
-    const store=window.IecDeviceStorageD3;if(!store)throw Error('store');
+    const store=await checkConnection();
     // Read the live canonical record; no cached ticket and no authentication bypass.
-    if(await store.connection()!==GAS_URL||!current())throw Error('connection');
-    const saved=await store.readTicket('iec.entry.resume.v1:/iec-board-icon/board-pwa/:'+GAS_URL,current);
-    if(!current())return;if(!saved||!saved.ticket)throw Error('empty');
+    let saved;try{saved=await store.readTicket('iec.entry.resume.v1:/iec-board-icon/board-pwa/:'+GAS_URL,current);}catch(error){recordError(error);report.entryCheck.ticket='read-error';throw entryError('ticket-read-failed');}
+    if(!current())return;
+    report.entryCheck.ticket=saved&&saved.removed?'removed':saved&&saved.ticket?'present':'missing';
+    if(saved&&saved.removed)throw entryError('ticket-removed');if(!saved||!saved.ticket)throw entryError('ticket-missing');
+    if(typeof saved.ticket!=='string'||!/^iec-resume-v1\.[A-Za-z0-9_-]{50,1600}\.[A-Za-z0-9_-]{43}$/.test(saved.ticket)){report.entryCheck.ticket='invalid';throw entryError('ticket-format');}
     sent=true;report.ticketReadyMs=Math.round(performance.now());report.outcome='verifying';refresh();
     frame.contentWindow.postMessage({app:APP,type:'ticket',nonce,page,ticket:saved.ticket},TRIAL_ORIGIN);
     status.textContent='本人確認と最新の行先を取得しています…';
-   }catch{if(current())fail('entry-unavailable','この画面では保存済みの本人情報を確認できません。通常の業務アプリを開き、本人確認してから試してください。');}finally{reading=false;}
+   }catch(error){if(current())entryFailure(error);}finally{reading=false;}
    return;
   }
   if(!sent||d.page!==page)return;
@@ -46,6 +69,6 @@
  refresh();
  (async()=>{
   if(!/^https:\/\/ishii-board-p003-startup-p076\.web\.app$/.test(TRIAL_ORIGIN)){fail('not-configured','試作は公開準備中です。通常の業務アプリを利用できます。');return;}
-  try{if(!window.IecDeviceStorageD3||await window.IecDeviceStorageD3.connection()!==GAS_URL)throw Error('connection');if(!current())return;report.connectionReadyMs=Math.round(performance.now());report.frameStartMs=Math.round(performance.now());report.outcome='loading';frame.src=TRIAL_ORIGIN+'/startup-p076/?nonce='+nonce;frame.hidden=false;status.textContent='試作の画面を開いています…';deadline=setTimeout(()=>fail('TIMEOUT','接続に時間がかかっています。通常の業務アプリを利用してください。'),60000);refresh();}catch{fail('entry-unavailable','通常の業務アプリで本人確認してから試してください。');}
+  try{await checkConnection();if(!current())return;report.connectionReadyMs=Math.round(performance.now());report.frameStartMs=Math.round(performance.now());report.outcome='loading';frame.src=TRIAL_ORIGIN+'/startup-p076/?nonce='+nonce;frame.hidden=false;status.textContent='試作の画面を開いています…';deadline=setTimeout(()=>fail('TIMEOUT','接続に時間がかかっています。通常の業務アプリを利用してください。'),60000);refresh();}catch(error){if(current())entryFailure(error);}
  })();
 })();
