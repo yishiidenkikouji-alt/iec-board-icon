@@ -23,4 +23,12 @@ export function syncCheck(d,uid,binding,at=Date.now()){
  }
  return result;
 }
+export function safeRefreshP081(value){
+ if(!value||value.version!=='P081-REFRESH-2')return null;
+ const result={version:'P081-REFRESH-2',path:value.path==='single-sync'?'single-sync':'unknown',resumeCardRequested:value.resumeCardRequested===true};
+ for(const key of ['resumeMs','prepareMs','triggerMs','syncMs','serverTotalMs']){
+  const v=value[key];result[key]=Number.isFinite(v)&&v>=0&&v<600000?Math.round(v):null;
+ }
+ return result;
+}
 

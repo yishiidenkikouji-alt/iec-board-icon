@@ -4,14 +4,16 @@
  */
 import {validCard,ticketIdentity,safeCode} from './startup-firebase-core.js?v=P078-ENTRY-1';
 import {grantIdentity} from './startup-refresh-core.js?v=P079-ENTRY-1';
-import {decodeSyncedCard,syncFresh,syncCheck} from './startup-sync-core.js?v=P081-ENTRY-2';
+import {decodeSyncedCard,syncFresh,syncCheck,safeRefreshP081} from './startup-sync-core.js?v=P081-ENTRY-3';
 const ROOT='https://yishiidenkikouji-alt.github.io/iec-board-icon/board-pwa/';
 const GAS_URL='https://script.google.com/macros/s/AKfycbyDl12j_i0NvCN45tSVgM0ngzAWE73hpuz69Mm9MMRQT_gZkrNJXgJNlGqAee-YG_7c/exec';
 const KEY='iec.entry.resume.v1:/iec-board-icon/board-pwa/:'+GAS_URL;
+const manualRefresh=new URL(location.href).searchParams.get('refresh')==='1';
 const $=id=>document.getElementById(id),now=()=>Math.round(performance.now());
 const nonce=Array.from(crypto.getRandomValues(new Uint8Array(32)),b=>b.toString(16).padStart(2,'0')).join('');
-const report={version:'P081-ENTRY-2',at:new Date().toISOString(),entryScriptMs:now(),mode:'preparing',authReadyMs:null,firstVerifiedCardMs:null,syncedCardMs:null,sourceAgeMs:null,firstReadMs:null,fallbackReason:'',requestMs:null,outcome:'preparing',background:document.hidden,errorCode:'',timing:null,refreshMode:'pending',gasRequests:0,reconnects:0,signInMs:null,latestReadMs:null,syncState:'pending',syncAttempt:null,syncCheck:null,transport:{state:'not-started',requestStartMs:null,frameReadyMs:null,submitReturnedMs:null,loadsAfterSubmit:0,lastFrameLoadMs:null,replyMessages:0,replyVersion:'none',replyNonce:'unchecked',responseMs:null,waitMs:null,blockedDirective:''}};
-let active=true,A,auth,stopAuth=null,expectedUid='',binding='',revision='',transport=null,limitTimer=null,displayTimer=null,checkTimer=null,serverTimer=null,reading=false,snapshotSeq=0,readController=null,displayUntil=0,freshTimer=null,lastData=null,grantHint='',refreshPromise=null;
+const report={version:'P081-ENTRY-3',at:new Date().toISOString(),entryScriptMs:now(),mode:'preparing',authReadyMs:null,firstVerifiedCardMs:null,syncedCardMs:null,sourceAgeMs:null,firstReadMs:null,fallbackReason:'',requestMs:null,outcome:'preparing',background:document.hidden,errorCode:'',timing:null,refreshMode:'pending',gasRequests:0,reconnects:0,signInMs:null,latestReadMs:null,syncState:'pending',syncAttempt:null,refreshP081:null,syncCheck:null,transport:{state:'not-started',requestStartMs:null,frameReadyMs:null,submitReturnedMs:null,loadsAfterSubmit:0,lastFrameLoadMs:null,replyMessages:0,replyVersion:'none',replyNonce:'unchecked',responseMs:null,waitMs:null,blockedDirective:''}};
+report.manualRefresh=manualRefresh;
+let active=true,A,auth,stopAuth=null,expectedUid='',binding='',revision='',transport=null,limitTimer=null,displayTimer=null,checkTimer=null,serverTimer=null,reading=false,snapshotSeq=0,readController=null,displayUntil=0,freshTimer=null,lastData=null,grantHint='',refreshPromise=null,refreshVerified=false,refreshExpectedAfter=null;
 function current(){return active&&!document.hidden;}
 function refresh(){ $('trialReport').value=JSON.stringify(report,null,2); }
 function clearCard(){ $('ownCard').hidden=true;for(const id of ['cardName','cardLabel','cardPlace','cardWork','cardFreshness'])$(id).textContent=''; }
@@ -69,9 +71,9 @@ async function display(data,seq){
  if(!validCard(data,expectedUid,binding)){fail('invalid-card','カードの登録情報を確認できませんでした。');return false;}
  try{await stillIdentity();}catch{fail('identity-changed','登録情報が変わりました。通常の業務アプリで確認してください。');return false;}
  if(!current()||seq!==snapshotSeq)return false;
- const fresh=syncFresh(data,expectedUid,binding);report.syncCheck=syncCheck(data,expectedUid,binding);lastData=data;
+ const currentSync=syncFresh(data,expectedUid,binding),fresh=currentSync&&(!manualRefresh||(refreshVerified&&(refreshExpectedAfter===null||data.updatedAt.toMillis()>refreshExpectedAfter)));report.syncCheck=syncCheck(data,expectedUid,binding);lastData=data;
  ['name','label','place','workContent'].forEach((key,i)=>{[$('cardName'),$('cardLabel'),$('cardPlace'),$('cardWork')][i].textContent=data.card[key];});
- $('cardFreshness').textContent=(fresh?'同期時点の行先':'前回の行先・更新待ち')+'（確認：'+new Date(data.updatedAt.toMillis()).toLocaleString('ja-JP')+'）';
+ $('cardFreshness').textContent=(fresh?'同期時点の行先':manualRefresh?'前回の行先・再同期中':'前回の行先・更新待ち')+'（確認：'+new Date(data.updatedAt.toMillis()).toLocaleString('ja-JP')+'）';
  $('ownCard').hidden=false;
  if(report.firstVerifiedCardMs===null)report.firstVerifiedCardMs=now();
  clearTimeout(freshTimer);
@@ -108,7 +110,7 @@ function ensureRefresh(reason){
 }
 async function refreshFromGas(){
  const latest=await stillIdentity();if(!current())return;
- const requestStart=now();report.gasRequests++;report.refreshMode='request';refresh();
+ const requestStart=now();if(manualRefresh)refreshExpectedAfter=lastData?lastData.updatedAt.toMillis():null;report.gasRequests++;report.refreshMode='request';refresh();
  transport=request(latest.ticket,grantHint);let result=await transport.promise;transport=null;
  if(!current())return;
  if(result&&result.ok===false&&result.code==='RECONNECT_REQUIRED'&&grantHint){
@@ -126,9 +128,9 @@ async function refreshFromGas(){
   if(stopAuth){stopAuth();stopAuth=null;}expectedUid=result.uid;const t=now();await A.signInWithCustomToken(auth,result.customToken);result.customToken='';if(!current())return;report.signInMs=now()-t;
   stopAuth=A.onAuthStateChanged(auth,user=>{if(current()&&(!user||user.uid!==expectedUid))fail('identity-changed','試作のログイン状態が変わりました。');});
  }else report.signInMs=0;
- report.refreshMode=result.refreshMode;report.syncAttempt={state:['ready','pending','inactive','busy','no-grant'].includes(result.syncP081?.state)?result.syncP081.state:'unknown',stage:['source','card','verify','mirror'].includes(result.syncP081?.stage)?result.syncP081.stage:'',serverMs:Number.isFinite(result.syncP081?.serverMs)&&result.syncP081.serverMs>=0&&result.syncP081.serverMs<600000?Math.round(result.syncP081.serverMs):null};report.timing={};
+ report.refreshMode=result.refreshMode;report.refreshP081=safeRefreshP081(result.refreshP081);report.syncAttempt={state:['ready','pending','inactive','busy','no-grant'].includes(result.syncP081?.state)?result.syncP081.state:'unknown',stage:['source','card','verify','mirror'].includes(result.syncP081?.stage)?result.syncP081.stage:'',serverMs:Number.isFinite(result.syncP081?.serverMs)&&result.syncP081.serverMs>=0&&result.syncP081.serverMs<600000?Math.round(result.syncP081.serverMs):null};report.timing={};
  for(const k of ['gasTotalMs','identityAndCardMs','identityMs','cardMs']){const v=result.timing?.[k];report.timing[k]=Number.isFinite(v)&&v>=0&&v<600000?Math.round(v):null;}
- const t=now();await readCard();report.latestReadMs=now()-t;refresh();beginChecks();
+ refreshVerified=true;const t=now();await readCard();report.latestReadMs=now()-t;refresh();beginChecks();
 }
 async function start(){
  if(window.top!==window||new URL('./',location.href).href!==ROOT||document.hidden){fail('interrupted','いつものホーム画面アプリの試作リンクから開いてください。');return;}
@@ -155,14 +157,16 @@ async function start(){
   if(!current())return;
   if(fresh){report.refreshMode='mirror';report.signInMs=0;refresh();beginChecks();return;}
  }
- await ensureRefresh(expectedUid?'stale':'first-connection');beginChecks();
+ await ensureRefresh(manualRefresh?'manual':expectedUid?'stale':'first-connection');beginChecks();
 }
 function stop(){if(!active)return;report.background=true;const completed=report.outcome==='success';active=false;clearCard();close();if(!completed)report.outcome='interrupted';$('trialStatus').textContent='画面を離れたためカードを閉じました。計測結果はコピーできます。';refresh();}
 document.addEventListener('visibilitychange',()=>{if(document.hidden)stop();});window.addEventListener('pagehide',stop);window.addEventListener('pageshow',e=>{if(e.persisted)stop();});
 window.addEventListener('offline',()=>fail('offline','通信が切れたためカードを閉じました。接続後にもう一度計測してください。'));
 window.addEventListener('storage',e=>{if(current()&&(e.key===null||e.key===KEY||e.key==='iec.board.pwa.gasUrl.v1')){fail('identity-changed','登録情報が変わりました。開き直してください。');if(auth)A.signOut(auth).catch(()=>{});}});
 document.addEventListener('securitypolicyviolation',e=>{if(!current())return;report.transport.blockedDirective=['frame-src','form-action','script-src','script-src-elem','connect-src'].includes(e.effectiveDirective)?e.effectiveDirective:'other';fail('browser-blocked','ブラウザーが接続を止めました。計測結果を共有してください。');});
-$('retry').onclick=()=>location.reload();
+function measure(force){const url=new URL(location.href);url.searchParams.set('v','P081-ENTRY-3');if(force)url.searchParams.set('refresh','1');else url.searchParams.delete('refresh');location.href=url.href;}
+$('retry').onclick=()=>measure(false);
+$('measureRefresh').onclick=()=>measure(true);
 $('copyReport').onclick=async()=>{refresh();try{await navigator.clipboard.writeText($('trialReport').value);$('copyStatus').textContent='計測結果をコピーしました。';}catch{$('trialReport').focus();$('trialReport').select();$('copyStatus').textContent='選択した結果をコピーしてください。';}};
 $('forgetTrial').onclick=async()=>{clearCard();close();active=false;try{if(auth)await A.signOut(auth);$('trialStatus').textContent='試作のログインを解除しました。通常の業務アプリの登録はそのままです。';}catch{$('trialStatus').textContent='解除を確認できませんでした。開き直して再度お試しください。';}};
 clearCard();refresh();limitTimer=setTimeout(endDisplay,75000);
