@@ -5,6 +5,7 @@ export function decodeSyncedCard(response){
  const date=k=>Date.parse(f[k]?.timestampValue);
  const receipt=f.refreshNonce?.stringValue;
  d.sync={version:f.version?.stringValue,status:f.status?.stringValue,checkedAt:date('checkedAt'),validUntil:date('validUntil'),windowUntil:date('windowUntil'),refreshNonce:/^[a-f0-9]{64}$/.test(receipt||'')?receipt:''};
+ d.sync.policy=safePolicyP081({version:f.hoursVersion?.stringValue,mode:f.hoursMode?.stringValue,remainingMs:date('windowUntil')-Date.now(),background:f.background?.stringValue});
  return d;
 }
 export function syncFresh(d,uid,binding,at=Date.now()){
@@ -32,5 +33,10 @@ export function safeRefreshP081(value){
   const v=value[key];result[key]=Number.isFinite(v)&&v>=0&&v<600000?Math.round(v):null;
  }
  return result;
+}
+export function safePolicyP081(value){
+ if(!value||value.version!=='P081-HOURS-1')return null;
+ const modes=['weekday-used','saturday-used','sunday-on-use','holiday-on-use','outside-hours','calendar-unknown'];
+ return {version:'P081-HOURS-1',mode:modes.includes(value.mode)?value.mode:'unknown',remainingMs:Number.isFinite(value.remainingMs)?Math.max(0,Math.min(43200000,Math.round(value.remainingMs))):null,background:['enabled','budget','no-grant'].includes(value.background)?value.background:'unknown'};
 }
 

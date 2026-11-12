@@ -118,7 +118,7 @@ test('sync diagnostics classify missing, expired, stopped and malformed stamps w
 });
 test('single-sync diagnostics accept only known timing fields and remain compatible with the previous addon',async()=>{
  const h=await launch();await h.snap({synced:false});await h.reply({result:{ok:true,uid,binding,refreshMode:'reused',refreshP081:{version:'P081-REFRESH-2',path:'single-sync',resumeCardRequested:false,resumeMs:100,prepareMs:200,triggerMs:50,syncMs:300,serverTotalMs:600,privateTicket:ticket,privateName:'PRIVATE_NAME'}}});await h.snap();await h.node('copyReport').onclick();
- assert.equal(h.report().version,'P081-ENTRY-4');assert.equal(h.report().refreshP081.path,'single-sync');assert.equal(h.report().refreshP081.resumeCardRequested,false);assert.equal(h.report().refreshP081.serverTotalMs,600);assert(!h.context.copied.includes(ticket));assert(!h.context.copied.includes('PRIVATE_NAME'));
+ assert.equal(h.report().version,'P081-ENTRY-5');assert.equal(h.report().refreshP081.path,'single-sync');assert.equal(h.report().refreshP081.resumeCardRequested,false);assert.equal(h.report().refreshP081.serverTotalMs,600);assert(!h.context.copied.includes(ticket));assert(!h.context.copied.includes('PRIVATE_NAME'));
  const old=await launch();await old.snap({synced:false});await old.reply();await old.snap();assert.equal(old.report().outcome,'success');assert.equal(old.report().refreshP081,null);
 });
 test('manual refresh measures a new authorized sync instead of declaring the initial fresh card complete',async()=>{
@@ -171,4 +171,10 @@ test('lost HTML after a verified receipt preserves authorized display but an exp
  const h=await launch(true,true);await h.snap({age:50000});await pollOnce(h,{age:1000,stampPatch:{refreshNonce:{stringValue:h.posts[0].fields.nonce}}});
  const timeout=[...h.timers.values()].find(t=>!t.interval&&t.ms===60000);timeout.fn();await settle();assert.equal(h.report().outcome,'success');assert.equal(h.report().directSyncP081.responseFailed,true);assert(!h.node('ownCard').hidden);
  const j=await launch(true,true);await j.snap({age:50000});await pollOnce(j,{age:1000,stampPatch:{refreshNonce:{stringValue:j.posts[0].fields.nonce}}});await j.reply({result:{ok:false,code:'ACCESS_DENIED'}});assert.equal(j.report().outcome,'access-denied');assert(j.node('ownCard').hidden);
+});
+
+test('hours policy is reported from authorized card metadata without exposing arbitrary source fields',async()=>{
+ const h=await launch();await h.snap({stampPatch:{hoursVersion:{stringValue:'P081-HOURS-1'},hoursMode:{stringValue:'weekday-used'},background:{stringValue:'enabled'},privateInfo:{stringValue:ticket}}});assert.equal(h.report().syncPolicyP081.mode,'weekday-used');assert.equal(h.report().syncPolicyP081.background,'enabled');assert(h.report().syncPolicyP081.remainingMs>0);assert.equal(h.report().gasRequests,0);await h.node('copyReport').onclick();assert(!h.context.copied.includes(ticket));
+ const j=await launch();await j.snap({stampPatch:{hoursVersion:{stringValue:'P081-HOURS-1'},hoursMode:{stringValue:ticket},background:{stringValue:'PRIVATE_NAME'}}});assert.equal(j.report().syncPolicyP081.mode,'unknown');assert.equal(j.report().syncPolicyP081.background,'unknown');await j.node('copyReport').onclick();assert(!j.context.copied.includes(ticket));assert(!j.context.copied.includes('PRIVATE_NAME'));
+ const old=await launch();await old.snap();assert.equal(old.report().syncPolicyP081,null);assert.equal(old.report().outcome,'success');
 });

@@ -4,15 +4,15 @@
  */
 import {validCard,ticketIdentity,safeCode} from './startup-firebase-core.js?v=P078-ENTRY-1';
 import {grantIdentity} from './startup-refresh-core.js?v=P079-ENTRY-1';
-import {decodeSyncedCard,syncFresh,syncCheck,safeRefreshP081} from './startup-sync-core.js?v=P081-ENTRY-4';
+import {decodeSyncedCard,syncFresh,syncCheck,safeRefreshP081,safePolicyP081} from './startup-sync-core.js?v=P081-ENTRY-5';
 const ROOT='https://yishiidenkikouji-alt.github.io/iec-board-icon/board-pwa/';
 const GAS_URL='https://script.google.com/macros/s/AKfycbyDl12j_i0NvCN45tSVgM0ngzAWE73hpuz69Mm9MMRQT_gZkrNJXgJNlGqAee-YG_7c/exec';
 const KEY='iec.entry.resume.v1:/iec-board-icon/board-pwa/:'+GAS_URL;
 const manualRefresh=new URL(location.href).searchParams.get('refresh')==='1';
 const $=id=>document.getElementById(id),now=()=>Math.round(performance.now());
 const nonce=Array.from(crypto.getRandomValues(new Uint8Array(32)),b=>b.toString(16).padStart(2,'0')).join('');
-const report={version:'P081-ENTRY-4',at:new Date().toISOString(),entryScriptMs:now(),mode:'preparing',authReadyMs:null,firstVerifiedCardMs:null,syncedCardMs:null,sourceAgeMs:null,firstReadMs:null,fallbackReason:'',requestMs:null,outcome:'preparing',background:document.hidden,errorCode:'',timing:null,refreshMode:'pending',gasRequests:0,reconnects:0,signInMs:null,latestReadMs:null,syncState:'pending',syncAttempt:null,refreshP081:null,syncCheck:null,transport:{state:'not-started',requestStartMs:null,frameReadyMs:null,submitReturnedMs:null,loadsAfterSubmit:0,lastFrameLoadMs:null,replyMessages:0,replyVersion:'none',replyNonce:'unchecked',responseMs:null,waitMs:null,blockedDirective:''}};
-report.manualRefresh=manualRefresh;
+const report={version:'P081-ENTRY-5',at:new Date().toISOString(),entryScriptMs:now(),mode:'preparing',authReadyMs:null,firstVerifiedCardMs:null,syncedCardMs:null,sourceAgeMs:null,firstReadMs:null,fallbackReason:'',requestMs:null,outcome:'preparing',background:document.hidden,errorCode:'',timing:null,refreshMode:'pending',gasRequests:0,reconnects:0,signInMs:null,latestReadMs:null,syncState:'pending',syncAttempt:null,refreshP081:null,syncCheck:null,transport:{state:'not-started',requestStartMs:null,frameReadyMs:null,submitReturnedMs:null,loadsAfterSubmit:0,lastFrameLoadMs:null,replyMessages:0,replyVersion:'none',replyNonce:'unchecked',responseMs:null,waitMs:null,blockedDirective:''}};
+report.manualRefresh=manualRefresh;report.syncPolicyP081=null;
 report.directSyncP081={reads:0,matched:false,cardBeforeResponseMs:null,responsePending:false,responseFailed:false};
 let active=true,A,auth,stopAuth=null,expectedUid='',binding='',revision='',transport=null,limitTimer=null,displayTimer=null,checkTimer=null,serverTimer=null,reading=false,snapshotSeq=0,readController=null,displayUntil=0,freshTimer=null,lastData=null,grantHint='',refreshPromise=null,refreshVerified=false,refreshExpectedAfter=null,watchTimer=null;
 function current(){return active&&!document.hidden;}
@@ -79,7 +79,7 @@ async function display(data,seq){
   if(report.directSyncP081.cardBeforeResponseMs===null)report.directSyncP081.cardBeforeResponseMs=now();
  }
  const refreshComplete=(refreshVerified&&(refreshExpectedAfter===null||newer))||receipt||report.directSyncP081.matched&&newer;
- const fresh=currentSync&&((manualRefresh||report.directSyncP081.responsePending)?refreshComplete:true);report.syncCheck=syncCheck(data,expectedUid,binding);lastData=data;
+ const fresh=currentSync&&((manualRefresh||report.directSyncP081.responsePending)?refreshComplete:true);report.syncCheck=syncCheck(data,expectedUid,binding);report.syncPolicyP081=safePolicyP081(data.sync?.policy);lastData=data;
  ['name','label','place','workContent'].forEach((key,i)=>{[$('cardName'),$('cardLabel'),$('cardPlace'),$('cardWork')][i].textContent=data.card[key];});
  $('cardFreshness').textContent=(fresh?'同期時点の行先':manualRefresh?'前回の行先・再同期中':'前回の行先・更新待ち')+'（確認：'+new Date(data.updatedAt.toMillis()).toLocaleString('ja-JP')+'）';
  $('ownCard').hidden=false;
@@ -156,7 +156,7 @@ async function refreshFromGas(){
   if(stopAuth){stopAuth();stopAuth=null;}expectedUid=result.uid;const t=now();await A.signInWithCustomToken(auth,result.customToken);result.customToken='';if(!current())return;report.signInMs=now()-t;
   stopAuth=A.onAuthStateChanged(auth,user=>{if(current()&&(!user||user.uid!==expectedUid))fail('identity-changed','試作のログイン状態が変わりました。');});
  }else report.signInMs=0;
- report.refreshMode=result.refreshMode;report.refreshP081=safeRefreshP081(result.refreshP081);report.syncAttempt={state:['ready','pending','inactive','busy','no-grant'].includes(result.syncP081?.state)?result.syncP081.state:'unknown',stage:['source','card','verify','mirror'].includes(result.syncP081?.stage)?result.syncP081.stage:'',serverMs:Number.isFinite(result.syncP081?.serverMs)&&result.syncP081.serverMs>=0&&result.syncP081.serverMs<600000?Math.round(result.syncP081.serverMs):null};report.timing={};
+ report.refreshMode=result.refreshMode;report.syncPolicyP081=safePolicyP081(result.syncPolicyP081);report.refreshP081=safeRefreshP081(result.refreshP081);report.syncAttempt={state:['ready','pending','inactive','busy','no-grant'].includes(result.syncP081?.state)?result.syncP081.state:'unknown',stage:['source','card','verify','mirror'].includes(result.syncP081?.stage)?result.syncP081.stage:'',serverMs:Number.isFinite(result.syncP081?.serverMs)&&result.syncP081.serverMs>=0&&result.syncP081.serverMs<600000?Math.round(result.syncP081.serverMs):null};report.timing={};
  for(const k of ['gasTotalMs','identityAndCardMs','identityMs','cardMs']){const v=result.timing?.[k];report.timing[k]=Number.isFinite(v)&&v>=0&&v<600000?Math.round(v):null;}
  refreshVerified=true;const t=now();await readCard();report.latestReadMs=now()-t;refresh();beginChecks();
 }
@@ -192,7 +192,7 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden)stop();});w
 window.addEventListener('offline',()=>fail('offline','通信が切れたためカードを閉じました。接続後にもう一度計測してください。'));
 window.addEventListener('storage',e=>{if(current()&&(e.key===null||e.key===KEY||e.key==='iec.board.pwa.gasUrl.v1')){fail('identity-changed','登録情報が変わりました。開き直してください。');if(auth)A.signOut(auth).catch(()=>{});}});
 document.addEventListener('securitypolicyviolation',e=>{if(!current())return;report.transport.blockedDirective=['frame-src','form-action','script-src','script-src-elem','connect-src'].includes(e.effectiveDirective)?e.effectiveDirective:'other';fail('browser-blocked','ブラウザーが接続を止めました。計測結果を共有してください。');});
-function measure(force){const url=new URL(location.href);url.searchParams.set('v','P081-ENTRY-4');if(force)url.searchParams.set('refresh','1');else url.searchParams.delete('refresh');location.href=url.href;}
+function measure(force){const url=new URL(location.href);url.searchParams.set('v','P081-ENTRY-5');if(force)url.searchParams.set('refresh','1');else url.searchParams.delete('refresh');location.href=url.href;}
 $('retry').onclick=()=>measure(false);
 $('measureRefresh').onclick=()=>measure(true);
 $('copyReport').onclick=async()=>{refresh();try{await navigator.clipboard.writeText($('trialReport').value);$('copyStatus').textContent='計測結果をコピーしました。';}catch{$('trialReport').focus();$('trialReport').select();$('copyStatus').textContent='選択した結果をコピーしてください。';}};
