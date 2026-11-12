@@ -35,7 +35,7 @@ function hello(e){return{app:'iec-device-resume-v1',nonce:new URL(e.frame.src).s
  // validated child messages can finish the Google wait stage.
  db=database();db.records.set(connectionKey,{v:1,url});db.records.set(key,JSON.parse(stored));
  e=client(db,new Map([[URL_KEY,url],[key,stored]]),true);e.at(250);await settle();
- assert.equal(new URL(e.frame.src).pathname,new URL(url).pathname);assert.equal(e.elements.entryVersion.textContent,'2026.11.12-D6');
+ assert.equal(new URL(e.frame.src).pathname,new URL(url).pathname);assert.equal(e.elements.entryVersion.textContent,'2026.11.12-D7');
  assert.match(e.open(),/接続先の端末確認：0.15秒/);assert.match(e.text(),/Google側の画面準備・通信：未計測/);
  e.at(5250);const message=hello(e);
  await e.message(message,'https://evil.example');await e.message({...message,nonce:'0'.repeat(64)});await e.message(message,'https://script.google.com',{});
