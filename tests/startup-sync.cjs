@@ -74,3 +74,46 @@ test('freshness validator rejects future, mismatched, oversized-window and expir
  assert.equal(ctx.syncFresh({...d,expiresAt:{toMillis:()=>170000}},uid,binding,now),false);
 });
 
+test('display deadline while GAS is pending records a terminal timeout, not refreshing plus unavailable',async()=>{
+ const h=await launch();await h.snap({synced:false});assert.equal(h.posts.length,1);
+ const displayDeadline=[...h.timers.values()].find(t=>!t.interval&&t.ms===60000);
+ h.at(61400);displayDeadline.fn();await settle();await h.node('copyReport').onclick();
+ assert.equal(h.report().outcome,'timeout');assert.equal(h.report().errorCode,'response-timeout');
+ assert.equal(h.report().requestMs,null);assert.equal(h.report().transport.state,'timeout');
+ assert(h.report().transport.waitMs>=60000);assert(h.node('ownCard').hidden);
+ await h.reply();assert.equal(h.report().outcome,'timeout');assert(h.node('ownCard').hidden);
+});
+
+test('transport diagnostics distinguish submit, loaded frame, rejected older response and matched response',async()=>{
+ const h=await launch();await h.snap({synced:false});const frame=h.created.filter(c=>c.tag==='iframe'&&!c.removed).at(-1);
+ assert.equal(h.report().transport.state,'waiting');assert.equal(h.report().transport.submitReturnedMs,10);
+ h.at(2000);await frame.emit('load');assert.equal(h.report().transport.loadsAfterSubmit,1);assert.equal(h.report().transport.lastFrameLoadMs,2000);
+ await h.reply({app:'iec-startup-trial-p080',version:'P080-RESPONSE-1'});assert.equal(h.report().transport.replyVersion,'older');assert.equal(h.report().requestMs,null);assert.equal(h.initialized.token,undefined);
+ await h.reply({nonce:'PRIVATE_WRONG_NONCE'});assert.equal(h.report().transport.replyNonce,'different');assert.equal(h.report().transport.state,'waiting');
+ h.at(4000);await h.reply();await h.snap();assert.equal(h.report().transport.state,'response');assert.equal(h.report().transport.replyVersion,'matched');assert.equal(h.report().transport.replyNonce,'matched');assert.equal(h.report().transport.responseMs,4000);assert.equal(h.report().outcome,'success');
+ await h.node('copyReport').onclick();for(const v of [ticket,uid,binding,'PRIVATE_WRONG_NONCE','PRIVATE_NAME',GAS])assert(!h.context.copied.includes(v));
+});
+
+test('pending request timeouts terminate while intentional cancellation preserves the actual reason',async()=>{
+ const h=await launch(false);h.at(60010);[...h.timers.values()].find(t=>!t.interval&&t.ms===60000).fn();await settle();
+ assert.equal(h.report().outcome,'timeout');assert.equal(h.report().errorCode,'response-timeout');assert.equal(h.report().transport.waitMs,60000);
+ for(const how of ['hidden','offline','blocked','forget']){
+  const j=await launch();await j.snap({synced:false});
+  if(how==='hidden'){j.context.document.hidden=true;await j.dispatch('visibilitychange');}
+  if(how==='offline')await j.dispatch('offline');
+  if(how==='blocked')await j.dispatch('securitypolicyviolation',{effectiveDirective:'form-action',blockedURI:GAS+'?PRIVATE',sample:ticket});
+  if(how==='forget')await j.node('forgetTrial').onclick();
+  await settle();await j.node('copyReport').onclick();assert.equal(j.report().errorCode,'');assert(j.node('ownCard').hidden);assert.equal(j.report().transport.state,'cancelled');
+  if(how==='hidden')assert.equal(j.report().outcome,'interrupted');
+  if(how==='offline')assert.equal(j.report().outcome,'offline');
+  if(how==='blocked'){assert.equal(j.report().outcome,'browser-blocked');assert.equal(j.report().transport.blockedDirective,'form-action');assert(!j.context.copied.includes('PRIVATE'));assert(!j.context.copied.includes(ticket));}
+ }
+});
+
+test('sync diagnostics classify missing, expired, stopped and malformed stamps without copying values',async()=>{
+ for(const [patch,expected] of [[{synced:false},'missing'],[{age:95000},'age-expired'],[{until:1000},'boundary-expired'],[{status:'stopped'},'stopped'],[{age:-1000},'clock-ahead'],[{stampPatch:{version:{stringValue:ticket}}},'invalid-stamp']]){
+  const h=await launch();await h.snap(patch);assert.equal(h.report().syncCheck.reason,expected);await h.node('copyReport').onclick();assert(!h.context.copied.includes(ticket));
+  if(expected==='stopped'){[...h.timers.values()].find(t=>!t.interval&&t.ms===60000).fn();await settle();await h.node('copyReport').onclick();assert.equal(h.report().outcome,'stopped');assert.equal(h.report().errorCode,'');}
+ }
+});
+
