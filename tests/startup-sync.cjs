@@ -118,7 +118,7 @@ test('sync diagnostics classify missing, expired, stopped and malformed stamps w
 });
 test('single-sync diagnostics accept only known timing fields and remain compatible with the previous addon',async()=>{
  const h=await launch();await h.snap({synced:false});await h.reply({result:{ok:true,uid,binding,refreshMode:'reused',refreshP081:{version:'P081-REFRESH-2',path:'single-sync',resumeCardRequested:false,resumeMs:100,prepareMs:200,triggerMs:50,syncMs:300,serverTotalMs:600,privateTicket:ticket,privateName:'PRIVATE_NAME'}}});await h.snap();await h.node('copyReport').onclick();
- assert.equal(h.report().version,'P081-ENTRY-3');assert.equal(h.report().refreshP081.path,'single-sync');assert.equal(h.report().refreshP081.resumeCardRequested,false);assert.equal(h.report().refreshP081.serverTotalMs,600);assert(!h.context.copied.includes(ticket));assert(!h.context.copied.includes('PRIVATE_NAME'));
+ assert.equal(h.report().version,'P081-ENTRY-4');assert.equal(h.report().refreshP081.path,'single-sync');assert.equal(h.report().refreshP081.resumeCardRequested,false);assert.equal(h.report().refreshP081.serverTotalMs,600);assert(!h.context.copied.includes(ticket));assert(!h.context.copied.includes('PRIVATE_NAME'));
  const old=await launch();await old.snap({synced:false});await old.reply();await old.snap();assert.equal(old.report().outcome,'success');assert.equal(old.report().refreshP081,null);
 });
 test('manual refresh measures a new authorized sync instead of declaring the initial fresh card complete',async()=>{
@@ -130,3 +130,45 @@ test('manual refresh measures a new authorized sync instead of declaring the ini
  const j=await launch(true,true);await j.deny();assert.equal(j.posts.length,0);assert(j.node('ownCard').hidden);
 });
 
+
+async function pollOnce(h,patch={}){
+ const timer=[...h.timers.values()].find(t=>!t.interval&&t.ms===1000);assert(timer,'bounded refresh watcher is scheduled');const pending=timer.fn();await settle();await h.snap(patch);await pending;await settle();
+}
+test('matching server receipt displays a new card before the slow HTML reply, then records that reply separately',async()=>{
+ const h=await launch(true,true);await h.snap({age:50000});h.at(3500);
+ await pollOnce(h,{age:1000,stampPatch:{refreshNonce:{stringValue:h.posts[0].fields.nonce}}});
+ assert.equal(h.report().outcome,'success');assert.equal(h.report().syncedCardMs,3500);assert.equal(h.report().requestMs,null);assert.equal(h.report().transport.state,'waiting');assert.equal(h.report().directSyncP081.matched,true);assert.equal(h.report().directSyncP081.reads,1);assert.equal(h.report().directSyncP081.cardBeforeResponseMs,3500);assert.equal(h.posts.length,1);assert.equal(h.initialized.token,undefined);
+ h.at(9000);await h.reply({result:{ok:true,uid,binding,refreshMode:'reused',refreshP081:{version:'P081-REFRESH-3',path:'combined-sync',resumeMs:200,sourceMs:100,cardMs:200,verifyMs:500,lockWaitMs:30,triggerMs:40,writeMs:100,serverTotalMs:1000,secret:ticket}}});await h.snap({age:1000});
+ assert.equal(h.report().syncedCardMs,3500);assert.equal(h.report().requestMs,8990);assert.equal(h.report().directSyncP081.responsePending,false);assert.equal(h.report().refreshP081.path,'combined-sync');
+ await h.node('copyReport').onclick();for(const s of [h.posts[0].fields.nonce,ticket,'PRIVATE_NAME','PRIVATE_ID_TOKEN'])assert(!h.context.copied.includes(s));
+});
+test('missing, foreign, old or expired receipts never complete a pending manual refresh',async()=>{
+ for(const patch of [{},{stampPatch:{refreshNonce:{stringValue:'f'.repeat(64)}}},{age:60000,ownReceipt:true},{age:95000,ownReceipt:true},{status:'stopped',ownReceipt:true}]){
+  const h=await launch(true,true);await h.snap({age:50000});const p={...patch};if(p.ownReceipt)p.stampPatch={refreshNonce:{stringValue:h.posts[0].fields.nonce}};await pollOnce(h,p);assert.equal(h.report().syncedCardMs,null);assert.equal(h.report().directSyncP081.matched,false);assert.equal(h.posts.length,1);
+ }
+});
+test('an idle stale refresh can deliver early while the already-fresh startup still performs no extra reads',async()=>{
+ const h=await launch();await h.snap({age:95000});h.at(4000);await pollOnce(h,{age:1000,stampPatch:{refreshNonce:{stringValue:h.posts[0].fields.nonce}}});assert.equal(h.report().outcome,'success');assert.equal(h.report().syncedCardMs,4000);assert.equal(h.report().gasRequests,1);
+ const j=await launch();await j.snap();assert.equal(j.report().directSyncP081.reads,0);assert.equal(j.posts.length,0);assert(![...j.timers.values()].some(t=>!t.interval&&t.ms===1000));
+});
+test('refresh polling is bounded, sequential and stopped after a receipt or reconnect',async()=>{
+ const h=await launch(true,true);await h.snap({age:50000});for(let i=0;i<12;i++)await pollOnce(h,{age:60000});assert.equal(h.report().directSyncP081.reads,12);assert.equal(h.posts.length,1);
+ // Even if the already-fired timer is invoked again by this fake scheduler,
+ // the guard must not issue a thirteenth GET.
+ const timer=[...h.timers.values()].find(t=>!t.interval&&t.ms===1000);if(timer){const pending=timer.fn();await settle();assert.equal(h.report().directSyncP081.reads,12);await pending;}
+ const j=await launch();await j.snap({age:95000});await j.reply({result:{ok:false,code:'RECONNECT_REQUIRED'}});assert.equal(j.posts.length,2);assert(![...j.timers.values()].some(t=>!t.interval&&t.ms===1000));
+});
+test('permission revocation or interruption during early reads clears the card and prevents late display',async()=>{
+ for(const how of ['denied','hidden','removed']){
+  const h=await launch(true,true);await h.snap({age:50000});const timer=[...h.timers.values()].find(t=>!t.interval&&t.ms===1000),pending=timer.fn();await settle();
+  if(how==='denied')await h.deny();
+  if(how==='hidden'){h.context.document.hidden=true;await h.dispatch('visibilitychange');await h.snap({stampPatch:{refreshNonce:{stringValue:h.posts[0].fields.nonce}}});}
+  if(how==='removed'){h.setSaved({removed:true,ticket:'',revision:'new'});await h.snap({stampPatch:{refreshNonce:{stringValue:h.posts[0].fields.nonce}}});}
+  await pending;assert(h.node('ownCard').hidden);assert.equal(h.report().syncedCardMs,null);assert.equal(h.report().directSyncP081.matched,false);
+ }
+});
+test('lost HTML after a verified receipt preserves authorized display but an explicit denial still closes it',async()=>{
+ const h=await launch(true,true);await h.snap({age:50000});await pollOnce(h,{age:1000,stampPatch:{refreshNonce:{stringValue:h.posts[0].fields.nonce}}});
+ const timeout=[...h.timers.values()].find(t=>!t.interval&&t.ms===60000);timeout.fn();await settle();assert.equal(h.report().outcome,'success');assert.equal(h.report().directSyncP081.responseFailed,true);assert(!h.node('ownCard').hidden);
+ const j=await launch(true,true);await j.snap({age:50000});await pollOnce(j,{age:1000,stampPatch:{refreshNonce:{stringValue:j.posts[0].fields.nonce}}});await j.reply({result:{ok:false,code:'ACCESS_DENIED'}});assert.equal(j.report().outcome,'access-denied');assert(j.node('ownCard').hidden);
+});

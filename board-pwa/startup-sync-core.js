@@ -3,7 +3,8 @@ export function decodeSyncedCard(response){
  const d=decodeCard(response),f=response.fields.syncP081?.mapValue?.fields;
  d.sync=null;if(!f)return d;
  const date=k=>Date.parse(f[k]?.timestampValue);
- d.sync={version:f.version?.stringValue,status:f.status?.stringValue,checkedAt:date('checkedAt'),validUntil:date('validUntil'),windowUntil:date('windowUntil')};
+ const receipt=f.refreshNonce?.stringValue;
+ d.sync={version:f.version?.stringValue,status:f.status?.stringValue,checkedAt:date('checkedAt'),validUntil:date('validUntil'),windowUntil:date('windowUntil'),refreshNonce:/^[a-f0-9]{64}$/.test(receipt||'')?receipt:''};
  return d;
 }
 export function syncFresh(d,uid,binding,at=Date.now()){
@@ -24,9 +25,10 @@ export function syncCheck(d,uid,binding,at=Date.now()){
  return result;
 }
 export function safeRefreshP081(value){
- if(!value||value.version!=='P081-REFRESH-2')return null;
- const result={version:'P081-REFRESH-2',path:value.path==='single-sync'?'single-sync':'unknown',resumeCardRequested:value.resumeCardRequested===true};
- for(const key of ['resumeMs','prepareMs','triggerMs','syncMs','serverTotalMs']){
+ if(!value||!['P081-REFRESH-2','P081-REFRESH-3'].includes(value.version))return null;
+ const latest=value.version==='P081-REFRESH-3',path=latest?'combined-sync':'single-sync';
+ const result={version:value.version,path:value.path===path?path:'unknown',resumeCardRequested:value.resumeCardRequested===true};
+ for(const key of latest?['resumeMs','sourceMs','cardMs','verifyMs','lockWaitMs','triggerMs','writeMs','serverTotalMs']:['resumeMs','prepareMs','triggerMs','syncMs','serverTotalMs']){
   const v=value[key];result[key]=Number.isFinite(v)&&v>=0&&v<600000?Math.round(v):null;
  }
  return result;
