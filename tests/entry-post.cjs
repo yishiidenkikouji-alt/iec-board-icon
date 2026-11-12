@@ -94,3 +94,21 @@ test('delivery diagnosis distinguishes request, validated capability, and fallba
  [...timed.timers.values()].find(t=>t.ms===25000).fn();await settle();
  assert.equal(timed.ctx.IecEntryDeliveryP083.report().fallback,'timeout');assert.match(timed.open(),/従来配信への切替：応答待ち上限/);
 });
+
+
+test('P085 preparations are bound to the existing configured frame, nonce, generation and request page',async()=>{
+ const e=make(),accepted=[];e.ctx.IecEntryCardP085={start(){},cancel(){},normal(){},report:()=>({version:'P085-ENTRY-1',path:'normal'}),accept:async(...args)=>accepted.push(args),forget:async()=>{}};
+ e.frame.src=url;await settle();await e.message(e.ready());await settle();
+ const hello={app:'iec-entry-card-p085',type:'hello',nonce:e.ready().nonce,page:'f'.repeat(32)};
+ for(const [data,origin,source] of [[hello,'https://evil.invalid',undefined],[{...hello,nonce:'0'.repeat(64)},'https://script.google.com',undefined],[hello,'https://script.google.com',{}]])await e.message(data,origin,source);
+ await settle();assert(!e.replies.some(r=>r.d.type==='prepare'));
+ await e.message(hello);await settle();const prepared=e.replies.filter(r=>r.d.type==='prepare');assert.equal(prepared.length,1);assert.equal(prepared[0].d.ticket,ticket);
+ await e.message(hello);await settle();assert.equal(e.replies.filter(r=>r.d.type==='prepare').length,1);
+ await e.message({...hello,type:'grant',page:'a'.repeat(32),result:{}});await settle();assert.equal(accepted.length,0);
+ await e.message({...hello,type:'grant',result:{ok:true}});await settle();assert.equal(accepted.length,1);assert.equal(accepted[0][1],ticket);assert.equal(accepted[0][2],url);
+ e.frame.src=url;await settle();await e.message({...hello,type:'grant',result:{ok:true}});await settle();assert.equal(accepted.length,1);
+});
+test('P085 preparation is not started from unrelated/nested iframe messages or background app',async()=>{
+ const e=make();e.ctx.IecEntryCardP085={start(){},cancel(){},report:()=>({}),accept:()=>{throw Error('must not sign in')}};e.frame.src=url;await settle();await e.message(e.ready());await settle();e.ctx.document.hidden=true;
+ await e.message({app:'iec-entry-card-p085',type:'hello',nonce:e.ready().nonce,page:'f'.repeat(32)});await settle();assert(!e.replies.some(r=>r.d.type==='prepare'));
+});

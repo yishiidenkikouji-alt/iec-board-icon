@@ -40,3 +40,4 @@ test('failed installation cannot activate an incomplete shell or remove existing
 test('shell caching does not intercept GAS, Firebase, or non-allowlisted files',()=>{
  const w=worker();for(const url of ['https://script.google.com/macros/s/example/exec','https://ishii-board-p003-startup-p076.web.app/business-assets/p083/part.js',root+'private.json'])assert.equal(w.fetch(url).response,undefined);
 });
+

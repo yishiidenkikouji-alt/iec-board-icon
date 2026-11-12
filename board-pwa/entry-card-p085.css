@@ -1,0 +1,10 @@
+#entryCardP085{position:absolute;inset:0;z-index:20;background:#f3f6f9;color:#263e55;overflow:auto;padding:20px 16px;font:16px/1.6 system-ui,-apple-system,"Noto Sans JP",sans-serif}
+#entryCardP085 .entry-card-panel{max-width:680px;margin:auto;background:#fff;border:1px solid #d6e0e8;border-radius:16px;padding:22px;box-shadow:0 3px 12px #263e5509}
+#entryCardP085 h1{font-size:25px;margin:4px 0 14px;font-weight:700}
+#entryCardP085 h2{font-size:13px;color:#63778a;margin:20px 0 4px;font-weight:600}
+#entryCardP085 p{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
+#entryCardP085 #entryCardTimeP085{font-size:12px;color:#64778a}
+#entryCardP085 #entryCardLabelP085{color:#16746d;font-weight:600}
+#entryCardP085 #entryCardPlaceP085{font-size:21px;font-weight:650}
+#entryCardP085 #entryCardProgressP085{margin-top:26px;padding-top:16px;border-top:1px solid #e3e9ee;font-size:14px;color:#64778a}
+#entryCardP085 button{margin-top:18px;font-size:13px;background:#f4f7fa;border-color:#d6e0e8;color:#526b7d}

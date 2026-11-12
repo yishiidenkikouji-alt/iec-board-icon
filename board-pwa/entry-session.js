@@ -143,7 +143,7 @@
  */
 (function(){
   'use strict';
-  const APP='iec-device-resume-v1', VERSION='2026.11.12-D9';
+  const APP='iec-device-resume-v1', VERSION='2026.11.12-D10';
   const ROOT=new URL('./',location.href), frame=document.getElementById('boardFrame');
   if(!frame||window.top!==window||location.origin!=='https://yishiidenkikouji-alt.github.io'||ROOT.pathname!=='/iec-board-icon/board-pwa/')return;
   const state={nonce:'',page:'',source:null,origin:'',key:'',lastSeq:0,generation:0};
@@ -152,7 +152,7 @@
   function random(){return Array.from(crypto.getRandomValues(new Uint8Array(32)),x=>x.toString(16).padStart(2,'0')).join('');}
   function setStatus(text){const el=document.getElementById('entrySessionStatus');if(el)el.textContent=text;}
   function validTicket(value){return typeof value==='string'&&value.length<=2000&&/^iec-resume-v1\.[A-Za-z0-9_-]{50,1600}\.[A-Za-z0-9_-]{43}$/.test(value);}
-  let queue=Promise.resolve();
+  let queue=Promise.resolve(),entryCardRequestP085=null;
   function storage(){if(!window.IecDeviceStorageD3)throw new Error('端末保持の更新を読み込めませんでした。アプリを開き直してください。');return window.IecDeviceStorageD3;}
   function context(){const captured={...state};captured.current=()=>state.generation===captured.generation&&state.nonce===captured.nonce&&state.page===captured.page&&state.source===captured.source&&state.origin===captured.origin;return captured;}
   function enqueue(fn){queue=queue.then(fn,fn).catch(()=>{});}
@@ -164,6 +164,7 @@
   function reply(c,type,body){if(c.current()&&c.source)c.source.postMessage(Object.assign({app:APP,type:type,nonce:c.nonce,page:c.page},body||{}),c.origin);}
   function prepare(value){
     diagnostic('waiting');
+    if(window.IecEntryCardP085)window.IecEntryCardP085.cancel('navigation');
     state.generation++;state.nonce='';state.page='';state.source=null;state.origin='';state.lastSeq=0;state.key='';
     let url;try{url=new URL(String(value));}catch(e){return value;}
     if(url.protocol!=='https:'||url.hostname!=='script.google.com'||url.username||url.password||url.port||!/^\/(?:a\/[^/]+\/)?macros\/s\/[A-Za-z0-9_-]{20,256}\/exec\/?$/.test(url.pathname))return value;
@@ -172,7 +173,7 @@
     launch('frame-start');
     // A short-lived channel nonce, NOT an identity or a login credential.
     url.searchParams.set('iec_resume_nonce',state.nonce);
-    setStatus('端末保持 D9：GASとの連携を確認中…');return url.href;
+    setStatus('端末保持 D10：GASとの連携を確認中…');return url.href;
   }
   // P082 capability is learned only from the configured iframe's nonce-bound hello.
   // It is a transport hint, never an identity or authorization decision.
@@ -198,6 +199,12 @@
     let target=prepare(value);const generation=state.generation;let parsed;
     try{parsed=new URL(target);}catch(ignore){descriptor.set.call(frame,target);return;}
     const ordinary=state.nonce&&Array.from(parsed.searchParams.keys()).every(k=>k==='iec_resume_nonce');
+    const initialTicketP085=ordinary&&!forceLegacy&&window.IecEntryCardP085?Promise.resolve().then(()=>storage().readTicket(state.key,()=>state.generation===generation)):null;
+    if(initialTicketP085)initialTicketP085.catch(()=>{});
+    if(window.IecEntryCardP085){
+      if(ordinary&&!forceLegacy)window.IecEntryCardP085.start(state.key,parsed.origin+parsed.pathname,()=>state.generation===generation,typeof window.IecEntryStartViewP082==='function'?window.IecEntryStartViewP082():'personal',initialTicketP085);
+      else window.IecEntryCardP085.cancel('navigation');
+    }
     const deliveryP083=ordinary&&!forceLegacy&&!deliveryFallbackP083&&deliveryCapP083();
     deliveryAttemptP083=deliveryP083;deliveryAdvertisedP083=null;
     deliveryRequestP083=deliveryP083?'assets':'inline';
@@ -208,7 +215,7 @@
     // Keep the GET path as the bounded fallback for storage failures, old deployments and blocked POSTs.
     async function start(){
       try{
-        const saved=await storage().readTicket(state.key,current);
+        const saved=await (initialTicketP085||storage().readTicket(state.key,current));
         if(!current())return;
         if(!validTicket(saved.ticket)||!/^[a-f0-9]{64}$/.test(saved.revision||'')||document.hidden){descriptor.set.call(frame,target);return;}
         // D7: submit inside the existing blank iframe to _self. A named target
@@ -242,6 +249,27 @@
   }catch(e){diagnostic('unavailable');setStatus('端末保持を準備できませんでした。ブラウザーを確認してください。');return;}
   window.addEventListener('message',function(event){
     const d=event.data;
+    if(d&&d.app==='iec-entry-card-p085'){
+      if(!window.IecEntryCardP085||!state.source||event.source!==state.source||event.origin!==state.origin||!belongs(event.source)||d.nonce!==state.nonce||!/^[a-f0-9]{32}$/.test(d.page||''))return;
+      const c=context(),prefix='iec.entry.resume.v1:'+ROOT.pathname+':';
+      if(!c.key.startsWith(prefix)||document.hidden)return;
+      if(d.type==='report'){c.source.postMessage({app:d.app,type:'report',nonce:c.nonce,page:d.page,report:window.IecEntryCardP085.report()},c.origin);return;}
+      if(d.type==='hello'){
+        if(entryCardRequestP085&&entryCardRequestP085.generation===c.generation)return;
+        entryCardRequestP085={generation:c.generation,page:d.page,sent:false};
+        enqueue(async()=>{try{const saved=await storage().readTicket(c.key,c.current);if(!c.current()||document.hidden||!validTicket(saved.ticket))return;
+          entryCardRequestP085.sent=true;c.source.postMessage({app:d.app,type:'prepare',nonce:c.nonce,page:d.page,ticket:saved.ticket},c.origin);
+        }catch(ignore){}});return;
+      }
+      if(d.type==='grant'&&entryCardRequestP085&&entryCardRequestP085.sent&&entryCardRequestP085.generation===c.generation&&entryCardRequestP085.page===d.page){
+        entryCardRequestP085.sent=false;
+        enqueue(async()=>{try{const saved=await storage().readTicket(c.key,c.current);if(!c.current()||document.hidden)return;
+          await window.IecEntryCardP085.accept(d.result,saved.ticket,c.key.slice(prefix.length),c.current);
+          if(c.current())c.source.postMessage({app:d.app,type:'report',nonce:c.nonce,page:d.page,report:window.IecEntryCardP085.report()},c.origin);
+        }catch(ignore){}});
+      }
+      return;
+    }
     if(d&&d.app==='iec-delivery-p083'){
       if(d.version!=='P083-DELIVERY-1'||d.type!=='fallback'||deliveryFallbackP083||!state.nonce||d.nonce!==state.nonce||!allowedOrigin(event.origin)||!belongs(event.source)||(state.source&&state.source!==event.source)||!deliveryAttemptP083)return;
       const prefix='iec.entry.resume.v1:'+ROOT.pathname+':';if(!state.key.startsWith(prefix))return;
@@ -258,15 +286,16 @@
       const c=context();
       enqueue(async function(){
         if(!c.current())return;
-        try{const saved=await storage().readTicket(c.key,c.current);if(!c.current())return;diagnostic(saved.ticket?'sent':'empty');launch('ticket-ready');let startupTimingD5=null;try{const diag=window.IecConnectionDiagnosticsD1;if(diag&&diag.timingForApp)startupTimingD5=diag.timingForApp();}catch(ignore){}reply(c,'ready',{revision:saved.revision,ticket:saved.ticket,version:VERSION,startupTimingD5:startupTimingD5,postP082:proofP082()});setStatus(saved.ticket?'端末保持 D9：保存した利用者をGASで検証中…':'端末保持 D9：未保存（GASで本人を登録後に保存します）');}
-        catch(e){if(!c.current())return;diagnostic('readError');reply(c,'ready',{revision:'',ticket:'',version:VERSION,error:'端末内の保存情報を読み取れません。情報は消していません。アプリを開き直してください。'});setStatus('端末保持 D9：保存情報を読み取れません（未登録には戻していません）');}
+        try{const saved=await storage().readTicket(c.key,c.current);if(!c.current())return;diagnostic(saved.ticket?'sent':'empty');launch('ticket-ready');let startupTimingD5=null;try{const diag=window.IecConnectionDiagnosticsD1;if(diag&&diag.timingForApp)startupTimingD5=diag.timingForApp();}catch(ignore){}reply(c,'ready',{revision:saved.revision,ticket:saved.ticket,version:VERSION,startupTimingD5:startupTimingD5,postP082:proofP082()});setStatus(saved.ticket?'端末保持 D10：保存した利用者をGASで検証中…':'端末保持 D10：未保存（GASで本人を登録後に保存します）');}
+        catch(e){if(!c.current())return;diagnostic('readError');reply(c,'ready',{revision:'',ticket:'',version:VERSION,error:'端末内の保存情報を読み取れません。情報は消していません。アプリを開き直してください。'});setStatus('端末保持 D10：保存情報を読み取れません（未登録には戻していません）');}
       });
       return;
     }
     if(event.source!==state.source||event.origin!==state.origin||d.page!==state.page||!Number.isSafeInteger(d.seq)||d.seq<=state.lastSeq)return;
     state.lastSeq=d.seq;
-    if(d.type==='performanceP082'){if(!['home','card'].includes(d.phase))return;if(postMarksP082[d.phase]===undefined)postMarksP082[d.phase]=Math.round(performance.now());reply(context(),'performanceP082',{phase:d.phase,entryMs:postMarksP082[d.phase]});return;}
+    if(d.type==='performanceP082'){if(!['home','card'].includes(d.phase))return;if(window.IecEntryCardP085)window.IecEntryCardP085.normal(d.phase);if(postMarksP082[d.phase]===undefined)postMarksP082[d.phase]=Math.round(performance.now());reply(context(),'performanceP082',{phase:d.phase,entryMs:postMarksP082[d.phase]});return;}
     if(d.type!=='save'&&d.type!=='remove')return;
+    if(d.type==='remove'&&window.IecEntryCardP085)void window.IecEntryCardP085.forget();
     const c=context(),request={type:d.type,requestId:String(d.requestId||''),expectedRevision:d.expectedRevision,ticket:d.ticket};
     enqueue(async function(){
       if(!c.current())return;
@@ -276,7 +305,7 @@
         const saved=await storage().writeTicket(c.key,request.expectedRevision,request.type==='save'?request.ticket:'',c.current);
         if(!c.current())return;
         ack.revision=saved.revision;ack.ok=true;
-        setStatus(request.type==='save'?'端末保持 D9：この端末に保存確認済み':'端末保持 D9：登録解除済み');
+        setStatus(request.type==='save'?'端末保持 D10：この端末に保存確認済み':'端末保持 D10：登録解除済み');
       }catch(e){ack.reason=e.code==='conflict'?'conflict':'storage';ack.error=String(e&&e.message||'端末への保存に失敗しました。');}
       if(!c.current())return;
       diagnostic(ack.ok?(request.type==='save'?'saved':'removed'):(ack.reason==='conflict'?'conflict':'writeError'));
@@ -285,7 +314,8 @@
   });
   // Tickets are sent only to the configured GAS origin in POST bodies or the nonce-bound bridge; never URLs, logs or analytics.
   const el=document.getElementById('entrySessionVersion');if(el)el.textContent=VERSION;
-  setStatus('端末保持 D9：接続先の設定を待っています');
+  setStatus('端末保持 D10：接続先の設定を待っています');
 })();
+
 
 
