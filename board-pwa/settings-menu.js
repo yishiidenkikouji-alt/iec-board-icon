@@ -39,6 +39,7 @@
     note.textContent=message||'設定を読み込み中です。業務アプリの表示後に、もう一度「設定」を押してください。';note.hidden=false;
   }
   function currentNonce(){
+    if(window.IecNativeHost&&window.IecNativeHost.matches(frame.contentWindow))return window.IecNativeHost.nonce;
     try{
       const url=new URL(frame.src);
       if(url.origin!=='https://script.google.com'||!/^\/(?:a\/[^/]+\/)?macros\/s\/[A-Za-z0-9_-]{20,256}\/exec\/?$/.test(url.pathname))return '';
@@ -63,7 +64,8 @@
   }
   window.addEventListener('message',function(event){
     const data=event.data,nonce=currentNonce();
-    if(!data||data.app!==APP||!nonce||data.nonce!==nonce||!/^[a-f0-9]{32}$/.test(String(data.page||''))||!allowed(event.origin)||!belongs(event.source))return;
+    const nativeP086=event.origin===location.origin&&window.IecNativeHost&&window.IecNativeHost.matches(event.source);
+    if(!data||data.app!==APP||!nonce||data.nonce!==nonce||!/^[a-f0-9]{32}$/.test(String(data.page||''))||(!allowed(event.origin)&&!nativeP086)||!belongs(event.source))return;
     if(state.nonce!==nonce)reset();
     if(data.type==='ready'){
       clearWaiting();
@@ -104,7 +106,7 @@
   new MutationObserver(function(){
     if(currentNonce()!==state.nonce)reset();
     else unlockBoardIfNativeSheetClosed();
-  }).observe(frame,{attributes:true,attributeFilter:['src']});
+  }).observe(frame,{attributes:true,attributeFilter:['src','srcdoc']});
   if(backdrop)new MutationObserver(unlockBoardIfNativeSheetClosed).observe(backdrop,{attributes:true,attributeFilter:['hidden']});
   ['pageshow','focus'].forEach(function(type){window.addEventListener(type,unlockBoardIfNativeSheetClosed);});
   document.addEventListener('visibilitychange',function(){if(!document.hidden)unlockBoardIfNativeSheetClosed();});
@@ -112,3 +114,4 @@
   reset();
   const version=document.getElementById('settingsMenuVersion');if(version)version.textContent=VERSION;
 })();
+

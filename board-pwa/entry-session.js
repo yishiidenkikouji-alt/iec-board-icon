@@ -143,7 +143,7 @@
  */
 (function(){
   'use strict';
-  const APP='iec-device-resume-v1', VERSION='2026.11.12-D10';
+  const APP='iec-device-resume-v1', VERSION='2026.11.12-D11';
   const ROOT=new URL('./',location.href), frame=document.getElementById('boardFrame');
   if(!frame||window.top!==window||location.origin!=='https://yishiidenkikouji-alt.github.io'||ROOT.pathname!=='/iec-board-icon/board-pwa/')return;
   const state={nonce:'',page:'',source:null,origin:'',key:'',lastSeq:0,generation:0};
@@ -163,6 +163,8 @@
   }
   function reply(c,type,body){if(c.current()&&c.source)c.source.postMessage(Object.assign({app:APP,type:type,nonce:c.nonce,page:c.page},body||{}),c.origin);}
   function prepare(value){
+    if(window.IecNativeP086)window.IecNativeP086.cancel();
+    frame.removeAttribute('srcdoc');
     diagnostic('waiting');
     if(window.IecEntryCardP085)window.IecEntryCardP085.cancel('navigation');
     state.generation++;state.nonce='';state.page='';state.source=null;state.origin='';state.lastSeq=0;state.key='';
@@ -199,6 +201,11 @@
     let target=prepare(value);const generation=state.generation;let parsed;
     try{parsed=new URL(target);}catch(ignore){descriptor.set.call(frame,target);return;}
     const ordinary=state.nonce&&Array.from(parsed.searchParams.keys()).every(k=>k==='iec_resume_nonce');
+    if(ordinary&&!forceLegacy&&window.IecNativeP086&&window.IecNativeP086.start({
+      frame:frame,key:state.key,url:parsed.origin+parsed.pathname,nonce:state.nonce,
+      current:()=>state.generation===generation,
+      fallback:()=>navigateP082(value,true,descriptor)
+    })){eventP082('loading');return;}
     const initialTicketP085=ordinary&&!forceLegacy&&window.IecEntryCardP085?Promise.resolve().then(()=>storage().readTicket(state.key,()=>state.generation===generation)):null;
     if(initialTicketP085)initialTicketP085.catch(()=>{});
     if(window.IecEntryCardP085){

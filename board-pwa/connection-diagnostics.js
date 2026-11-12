@@ -5,7 +5,7 @@
   'use strict';
   const ROOT=new URL('./',location.href);
   if(window.top!==window||ROOT.origin!=='https://yishiidenkikouji-alt.github.io'||ROOT.pathname!=='/iec-board-icon/board-pwa/')return;
-  const VERSION='2026.11.12-D10',URL_KEY='iec.board.pwa.gasUrl.v1';
+  const VERSION='2026.11.12-D11',URL_KEY='iec.board.pwa.gasUrl.v1';
   const PREFIX='iec.entry.resume.v1:'+ROOT.pathname+':';
   const TEST_KEY='iec.entry.diagnostic.v1:'+ROOT.pathname;
   const EXPECTED='https://script.google.com/macros/s/AKfycbyDl12j_i0NvCN45tSVgM0ngzAWE73hpuz69Mm9MMRQT_gZkrNJXgJNlGqAee-YG_7c/exec';

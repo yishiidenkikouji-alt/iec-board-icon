@@ -8,7 +8,7 @@
   'use strict';
   const ROOT=new URL('./',location.href);
   if(window.top!==window||ROOT.origin!=='https://yishiidenkikouji-alt.github.io'||ROOT.pathname!=='/iec-board-icon/board-pwa/')return;
-  const VERSION='2026.11.12-D10',URL_KEY='iec.board.pwa.gasUrl.v1';
+  const VERSION='2026.11.12-D11',URL_KEY='iec.board.pwa.gasUrl.v1';
   const PREFIX='iec.entry.resume.v1:'+ROOT.pathname+':';
   const TEST_KEY='iec.entry.diagnostic.v1:'+ROOT.pathname;
   const EXPECTED='https://script.google.com/macros/s/AKfycbyDl12j_i0NvCN45tSVgM0ngzAWE73hpuz69Mm9MMRQT_gZkrNJXgJNlGqAee-YG_7c/exec';
@@ -128,115 +128,89 @@
 
 
 
-;/* entry-card-p085.js */
-/* P085: authenticated own-card preview on the ordinary entry. No cached PII.
- * Every visible card came from an online Firestore GET with live rule checks.
- * The existing GAS frame remains responsible for every operation and latest data.
- */
+;/* entry-native-p086.js */
+/* Public transport code only; private application HTML is fetched after authorization. */
 (function(){
  'use strict';
- const ORIGIN='https://yishiidenkikouji-alt.github.io',ROOT='/iec-board-icon/board-pwa/';
- if(location.origin!==ORIGIN||window.top!==window||new URL('./',location.href).pathname!==ROOT)return;
- const PROJECT='ishii-board-trial-p003',VERSION='P085-ENTRY-1';
- let epoch=0,run=null,authPromise=null,overlay=null,expiryTimer=null,readTimer=null,abort=null;
- let stats={version:VERSION,path:'normal',firstCardMs:null,normalHomeMs:null,latestCardMs:null,sourceAgeMs:null,prepared:false,reason:''};
- const now=()=>Math.round(performance.now());
- const hash=async value=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value))),n=>n.toString(16).padStart(2,'0')).join('');
- function ticketIdentity(ticket){
-  if(typeof ticket!=='string'||!/^iec-resume-v1\.[A-Za-z0-9_-]{50,1600}\.[A-Za-z0-9_-]{43}$/.test(ticket))throw Error('ticket');
-  const raw=ticket.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');
-  const p=JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(raw),c=>c.charCodeAt(0))));
-  if(p.v!==1||!/^iec-device-v3:[a-f0-9]{32}$/.test(p.i||'')||typeof p.r!=='string'||!p.r||typeof p.b!=='string'||!p.b||!Number.isFinite(p.e)||p.e<=Date.now())throw Error('ticket');
-  return JSON.stringify([p.i,p.r,p.b]);
+ const API='https://asia-northeast1-ishii-board-trial-p003.cloudfunctions.net/businessAppP086';
+ const GAS='https://script.google.com/macros/s/AKfycbyDl12j_i0NvCN45tSVgM0ngzAWE73hpuz69Mm9MMRQT_gZkrNJXgJNlGqAee-YG_7c/exec';
+ let sdkPromise=null,active=null,signInQueue=Promise.resolve();
+ const random=()=>Array.from(crypto.getRandomValues(new Uint8Array(16)),v=>v.toString(16).padStart(2,'0')).join('');
+ const hash=async text=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text))),v=>v.toString(16).padStart(2,'0')).join('');
+ function sdk(){
+  if(!sdkPromise)sdkPromise=Promise.all([import('https://www.gstatic.com/firebasejs/13.2.0/firebase-app.js'),import('https://www.gstatic.com/firebasejs/13.2.0/firebase-auth.js')]).then(async([app,lib])=>{
+   const instance=app.initializeApp({apiKey:'AIzaSyA8kXcaabbAGJeme8SqhdBEcW9_2bDE95A',authDomain:'ishii-board-trial-p003.firebaseapp.com',projectId:'ishii-board-trial-p003',appId:'1:370469807597:web:f708cc81213706a80673e4'},'iec-native-p086');
+   const auth=lib.initializeAuth(instance,{persistence:[lib.indexedDBLocalPersistence,lib.browserLocalPersistence,lib.browserSessionPersistence]});
+   await auth.authStateReady();return {auth,lib};
+  });
+  return sdkPromise;
  }
- async function sdk(){
-  if(!authPromise)authPromise=(async()=>{
-   const base='https://www.gstatic.com/firebasejs/13.0.0/';
-   const [app,auth]=await Promise.all([import(base+'firebase-app.js'),import(base+'firebase-auth.js')]);
-   const instance=app.initializeApp({apiKey:'AIzaSyA8kXcaabbAGJeme8SqhdBEcW9_2bDE95A',authDomain:PROJECT+'.firebaseapp.com',projectId:PROJECT,appId:'1:370469807597:web:f708cc81213706a80673e4'},'iec-entry-card-p085');
-   const session=auth.initializeAuth(instance,{persistence:[auth.indexedDBLocalPersistence,auth.browserLocalPersistence]});
-   await auth.setPersistence(session,auth.indexedDBLocalPersistence).catch(()=>auth.setPersistence(session,auth.browserLocalPersistence));
-   await session.authStateReady();return {session,auth};
-  })().catch(e=>{authPromise=null;throw e;});
-  return authPromise;
- }
- function hide(){
-  clearTimeout(expiryTimer);clearTimeout(readTimer);if(abort)abort.abort();abort=null;
-  if(overlay){overlay.remove();overlay=null;}
- }
- function cancel(reason){epoch++;hide();run=null;if(reason)stats.reason=reason;}
- function active(r){return run===r&&r.epoch===epoch&&r.current()&&!document.hidden&&navigator.onLine!==false&&!r.finished;}
- function decode(response,r,uid){
-  const f=response&&response.fields,c=f&&f.card&&f.card.mapValue&&f.card.mapValue.fields;
-  const text=(o,k)=>o&&o[k]&&o[k].stringValue;
-  if(!f||!c||text(f,'uid')!==uid||text(f,'binding')!==r.binding||text(f,'endpointHash')!==r.endpointHash)throw Error('identity');
-  const updated=Date.parse(f.updatedAt&&f.updatedAt.timestampValue),expires=Date.parse(f.expiresAt&&f.expiresAt.timestampValue);
-  if(!Number.isFinite(updated)||!Number.isFinite(expires)||updated>Date.now()+60000||expires<=Date.now()||expires>updated+7*86400000)throw Error('expiry');
-  const card={};for(const k of ['name','label','place','workContent']){const v=text(c,k);if(typeof v!=='string'||v.length>3000)throw Error('card');card[k]=v;}
-  if(!card.name)return null;return {card,updated,expires};
- }
- function paint(d,r){
-  if(!active(r))return;
-  if(!overlay){
-   overlay=document.createElement('section');overlay.id='entryCardP085';overlay.setAttribute('aria-label','本人カード');
-   const panel=document.createElement('div');panel.className='entry-card-panel';overlay.appendChild(panel);
-   for(const [tag,id] of [['p','entryCardTimeP085'],['h1','entryCardNameP085'],['p','entryCardLabelP085'],['h2','entryCardPlaceTitleP085'],['p','entryCardPlaceP085'],['h2','entryCardWorkTitleP085'],['p','entryCardWorkP085'],['p','entryCardProgressP085']]){const el=document.createElement(tag);el.id=id;panel.appendChild(el);}
-   panel.querySelector('#entryCardPlaceTitleP085').textContent='行先';panel.querySelector('#entryCardWorkTitleP085').textContent='作業内容';
-   const close=document.createElement('button');close.type='button';close.textContent='読み込み中の画面を表示';close.addEventListener('click',()=>{r.finished=true;hide();});panel.appendChild(close);
-   document.getElementById('boardArea').appendChild(overlay);
+ function cancel(){if(active){active.cancelled=true;clearInterval(active.check);active=null;}window.IecNativeHost=null;}
+ function scriptJson(x){return JSON.stringify(x).replace(/[<>&\u2028\u2029]/g,c=>'\\u'+c.charCodeAt(0).toString(16).padStart(4,'0'));}
+ function start(o){
+  if(!window.IEC_PWA_CONFIG||window.IEC_PWA_CONFIG.nativeP086!==true||o.url!==GAS)return false;
+  cancel();const s={cancelled:false,attached:false,check:null,ticketHash:'',key:o.key,originTicket:'',gasCalls:0,checking:false,
+   metrics:{version:'P086-OPERATIONS-1',path:'firebase',screenReadyMs:null,latestCardMs:null,talkReadyMs:null,privateHtmlMs:null,bootstrapMs:null}};
+  active=s;const current=()=>active===s&&!s.cancelled&&o.current();
+  function failBeforeStart(){if(!current()||s.attached)return;cancel();o.fallback();}
+  async function unchanged(){
+   const saved=await window.IecDeviceStorageD3.readTicket(o.key,current);
+   if(!current()||saved.ticket!==s.originTicket)throw Object.assign(Error('保存した利用者が変わりました。'),{code:'RECONNECT'});
   }
-  for(const [key,id] of [['name','entryCardNameP085'],['label','entryCardLabelP085'],['place','entryCardPlaceP085'],['workContent','entryCardWorkP085']])overlay.querySelector('#'+id).textContent=d.card[key]||'—';
-  overlay.querySelector('#entryCardTimeP085').textContent=new Date(d.updated).toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})+'時点・前回確認した行先';
-  overlay.querySelector('#entryCardProgressP085').textContent='最新の行先を確認し、日報・勤怠などの操作画面を準備しています…';
-  if(stats.firstCardMs===null)stats.firstCardMs=now();stats.path='firebase';stats.sourceAgeMs=Math.max(0,Date.now()-d.updated);
-  clearTimeout(expiryTimer);expiryTimer=setTimeout(()=>{r.finished=true;hide();},Math.max(0,Math.min(d.expires-Date.now(),r.previewUntil-performance.now())));
+  async function request(body,authenticated=true){
+   const {auth}=await sdk();if(!current())throw Error('navigation');
+   if(authenticated)await unchanged();
+   const headers={'Content-Type':'application/json'};
+   if(authenticated){if(!auth.currentUser)throw Object.assign(Error('本人確認が必要です。'),{code:'AUTH'});headers.Authorization='Bearer '+await auth.currentUser.getIdToken();headers['X-IEC-Ticket-Hash']=s.ticketHash;}
+   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),75000);
+   try{
+    const response=await fetch(API,{method:'POST',headers,body:JSON.stringify(body),cache:'no-store',credentials:'omit',signal:controller.signal});
+    const data=await response.json();if(!current())throw Error('navigation');
+    if(!response.ok||data.ok!==true)throw Object.assign(Error(data.message||'応答を確認できません。'),{code:data.code||'UNAVAILABLE'});
+    return data.result;
+   }finally{clearTimeout(timer);}
+  }
+  function invalidate(){
+   if(!current())return;s.cancelled=true;clearInterval(s.check);
+   try{o.frame.contentWindow.suspendDeviceIdentity_('本人確認を更新してください。入口を開き直してください。');}catch(ignore){}
+   o.frame.removeAttribute('srcdoc');o.frame.srcdoc='<p style="font:18px sans-serif;padding:24px">本人確認を更新してください。業務アプリを開き直してください。</p>';
+   void sdk().then(x=>x.lib.signOut(x.auth));
+  }
+  async function launch(){
+   const saved=await window.IecDeviceStorageD3.readTicket(o.key,current);
+   if(!saved.ticket||!current())return failBeforeStart();
+   s.originTicket=saved.ticket;s.ticketHash=await hash(saved.ticket);
+   const {auth,lib}=await sdk();await signInQueue;if(!current())return;let result;
+   const started=performance.now();
+   if(auth.currentUser)try{result=await request({op:'bootstrap'});}catch(e){if(!['AUTH','RECONNECT'].includes(e.code))throw e;}
+   if(!result){
+    const grant=await request({op:'enroll',ticket:saved.ticket},false);
+    if(!current()||grant.version!=='P086-NATIVE-1'||grant.ticketHash!==s.ticketHash)throw Error('grant');
+    await (signInQueue=signInQueue.catch(()=>{}).then(async()=>{if(!current())throw Error('navigation');await unchanged();await lib.signInWithCustomToken(auth,grant.customToken);if(!current()){await lib.signOut(auth);throw Error('navigation');}}));
+    result=await request({op:'bootstrap'});
+   }
+   if(!current()||result.version!=='P086-NATIVE-1'||typeof result.html!=='string'||!result.html.includes('data-native-p086'))throw Error('bootstrap');
+   s.metrics.bootstrapMs=Math.round(performance.now()-started);
+   const host={access:result.access,nonce:o.nonce,matches:w=>current()&&w===o.frame.contentWindow,
+    call:async(w,method,args,context)=>{
+     if(!host.matches(w))throw Error('navigation');
+     try{if(!['getClientModule212','issueFirebaseP012','getDeviceAccessConfigV2'].includes(method))s.gasCalls++;
+      return await request({op:'rpc',method,args,context,requestId:random()});
+     }catch(e){if(['AUTH','RECONNECT'].includes(e.code))invalidate();throw e;}
+    },
+    mark:key=>{if(current()&&Object.hasOwn(s.metrics,key)&&s.metrics[key]===null){s.metrics[key]=Math.round(performance.now());if(key==='screenReadyMs')window.dispatchEvent(new CustomEvent('iec-entry-navigationP082',{detail:{phase:'ready'}}));}},
+    report:()=>({...s.metrics,gasCalls:s.gasCalls}),invalidate,
+    normalEntry:()=>{if(!current())return;cancel();o.frame.removeAttribute('srcdoc');o.fallback();}};
+   window.IecNativeHost=Object.freeze(host);s.attached=true;
+   const bootstrap={nonce:o.nonce,boardUrl:GAS,serverReleaseP017:'2026.11.12-r253-P014-P84',talkP012:true,initialP010:true,initialCardP074:false,confirmationSendVersion:134,nativeP086:true};
+   o.frame.srcdoc=result.html.replace('<script type="application/json" id="deviceResumeBootstrap">{}</script>',()=>'<script type="application/json" id="deviceResumeBootstrap">'+scriptJson(bootstrap)+'</script>');
+   s.metrics.privateHtmlMs=Math.round(performance.now());
+   // Stop reads/display after revocation, and also recheck before each operation.
+   s.check=setInterval(async()=>{if(!current()||document.hidden||s.checking)return;s.checking=true;try{await request({op:'check'});}catch(e){if(['AUTH','RECONNECT'].includes(e.code))invalidate();}finally{s.checking=false;}},60000);
+  }
+  void launch().catch(failBeforeStart);return true;
  }
- async function read(r){
-  if(!active(r))return;
-  const {session}=await sdk();if(!active(r))return;
-  const user=session.currentUser;if(!user||!/^p085_[a-f0-9]{64}$/.test(user.uid)){stats.reason='first-connection';hide();return;}
-  const token=await user.getIdTokenResult();if(!active(r))return;
-  const c=token.claims;if(c.iecP085!==true||c.binding!==r.binding||c.endpointHash!==r.endpointHash||user.uid!=='p085_'+c.sid){stats.reason='binding';hide();return;}
-  abort=new AbortController();const controller=abort,timer=setTimeout(()=>controller.abort(),3500);
-  try{
-   const response=await fetch('https://firestore.googleapis.com/v1/projects/'+PROJECT+'/databases/(default)/documents/p085Cards/'+user.uid,{headers:{Authorization:'Bearer '+token.token},cache:'no-store',credentials:'omit',referrerPolicy:'no-referrer',signal:controller.signal});
-   if(!active(r))return;if(!response.ok)throw Error('read');
-   const data=decode(await response.json(),r,user.uid);if(!active(r)||!data)return;
-   const latest=await window.IecDeviceStorageD3.readTicket(r.key,r.current);
-   if(!active(r)||await hash(ticketIdentity(latest.ticket))!==r.binding)return;
-   paint(data,r);readTimer=setTimeout(()=>read(r).catch(()=>{if(run===r){stats.reason='read';hide();}}),5000);
-  }finally{clearTimeout(timer);if(abort===controller)abort=null;}
- }
- function start(key,url,current,view,savedPromise){
-  cancel();stats={version:VERSION,path:'normal',firstCardMs:null,normalHomeMs:null,latestCardMs:null,sourceAgeMs:null,prepared:false,reason:''};
-  if(view!=='personal'||navigator.onLine===false||document.hidden){stats.reason='skipped';return;}
-  const r={key,url,current,epoch,finished:false,previewUntil:performance.now()+20000,binding:'',endpointHash:''};run=r;
-  // Nothing in this promise is on the critical path of ordinary iframe startup.
-  return Promise.resolve().then(async()=>{
-   const saved=await (savedPromise||window.IecDeviceStorageD3.readTicket(key,current));if(!active(r))return;
-   [r.binding,r.endpointHash]=await Promise.all([hash(ticketIdentity(saved.ticket)),hash(url)]);
-   if(active(r))await read(r);
-  }).catch(()=>{if(run===r){stats.reason='unavailable';hide();}});
- }
- function normal(phase){
-  if(phase==='home'){if(stats.normalHomeMs===null)stats.normalHomeMs=now();if(run)run.finished=true;hide();}
-  if(phase==='card'&&stats.latestCardMs===null)stats.latestCardMs=now();
- }
- async function accept(grant,ticket,url,current){
-  const generation=epoch,validContext=current;current=()=>epoch===generation&&validContext();
-  if(!current()||document.hidden||!grant||grant.version!=='P085-CARD-1'||grant.ok!==true||!/^p085_[a-f0-9]{64}$/.test(grant.uid||'')||typeof grant.customToken!=='string'||grant.customToken.length>6000)return false;
-  const [binding,endpointHash]=await Promise.all([hash(ticketIdentity(ticket)),hash(url)]);
-  if(!current()||grant.binding!==binding||grant.endpointHash!==endpointHash)return false;
-  const {session,auth}=await sdk();if(!current()||document.hidden)return false;
-  const signed=await auth.signInWithCustomToken(session,grant.customToken);
-  if(!current()||document.hidden||signed.user.uid!==grant.uid){await auth.signOut(session);return false;}
-  stats.prepared=true;return true;
- }
- async function forget(){cancel('removed');try{const {session,auth}=await sdk();await auth.signOut(session);}catch(ignore){}}
- document.addEventListener('visibilitychange',()=>{if(document.hidden)cancel('background');});
- window.addEventListener('pagehide',()=>cancel('background'));window.addEventListener('offline',()=>cancel('offline'));
- window.addEventListener('storage',e=>{if(!e.key||run&&e.key===run.key)cancel('storage-change');});
- window.IecEntryCardP085=Object.freeze({start,cancel,normal,accept,forget,report:()=>({...stats})});
+ window.IecNativeP086=Object.freeze({start,cancel,active:()=>!!(active&&active.attached&&!active.cancelled)});
 })();
 
 
@@ -386,7 +360,7 @@
  */
 (function(){
   'use strict';
-  const APP='iec-device-resume-v1', VERSION='2026.11.12-D10';
+  const APP='iec-device-resume-v1', VERSION='2026.11.12-D11';
   const ROOT=new URL('./',location.href), frame=document.getElementById('boardFrame');
   if(!frame||window.top!==window||location.origin!=='https://yishiidenkikouji-alt.github.io'||ROOT.pathname!=='/iec-board-icon/board-pwa/')return;
   const state={nonce:'',page:'',source:null,origin:'',key:'',lastSeq:0,generation:0};
@@ -406,6 +380,8 @@
   }
   function reply(c,type,body){if(c.current()&&c.source)c.source.postMessage(Object.assign({app:APP,type:type,nonce:c.nonce,page:c.page},body||{}),c.origin);}
   function prepare(value){
+    if(window.IecNativeP086)window.IecNativeP086.cancel();
+    frame.removeAttribute('srcdoc');
     diagnostic('waiting');
     if(window.IecEntryCardP085)window.IecEntryCardP085.cancel('navigation');
     state.generation++;state.nonce='';state.page='';state.source=null;state.origin='';state.lastSeq=0;state.key='';
@@ -442,6 +418,11 @@
     let target=prepare(value);const generation=state.generation;let parsed;
     try{parsed=new URL(target);}catch(ignore){descriptor.set.call(frame,target);return;}
     const ordinary=state.nonce&&Array.from(parsed.searchParams.keys()).every(k=>k==='iec_resume_nonce');
+    if(ordinary&&!forceLegacy&&window.IecNativeP086&&window.IecNativeP086.start({
+      frame:frame,key:state.key,url:parsed.origin+parsed.pathname,nonce:state.nonce,
+      current:()=>state.generation===generation,
+      fallback:()=>navigateP082(value,true,descriptor)
+    })){eventP082('loading');return;}
     const initialTicketP085=ordinary&&!forceLegacy&&window.IecEntryCardP085?Promise.resolve().then(()=>storage().readTicket(state.key,()=>state.generation===generation)):null;
     if(initialTicketP085)initialTicketP085.catch(()=>{});
     if(window.IecEntryCardP085){
@@ -572,7 +553,7 @@
   'use strict';
   const APP='iec-board-badge', PROTOCOL=1;
   const URL_KEY='iec.board.pwa.gasUrl.v1';
-  const VERSION='2026.11.12-D10';
+  const VERSION='2026.11.12-D11';
   const ENTRY=new URL('./',window.location.href);
   const NOTIFY_KEY='iec.board.pwa.notifications:'+ENTRY.pathname;
   const NOTIFY_TAG=APP+':'+ENTRY.pathname+':snapshot';
@@ -825,7 +806,8 @@
   window.addEventListener('message',function(event){
     const data=event.data;
     if(!data||data.app!==APP||data.protocol!==PROTOCOL||typeof data.pageId!=='string'||!/^[a-f0-9]{32}$/.test(data.pageId))return;
-    if(!validGoogleOrigin(event.origin)||!isChildOfBoard(event.source))return;
+    const nativeP086=event.origin===location.origin&&window.IecNativeHost&&window.IecNativeHost.matches(event.source);
+    if((!validGoogleOrigin(event.origin)&&!nativeP086)||!isChildOfBoard(event.source))return;
     if(data.type==='hello'){
       if(state.source!==event.source||state.pageId!==data.pageId||state.origin!==event.origin){
         pushPending139.forEach(task=>{clearTimeout(task.timer);task.reject(new Error('接続が更新されました。通知設定を開き直してください。'));});pushPending139.clear();

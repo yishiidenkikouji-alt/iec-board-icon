@@ -5,7 +5,7 @@
   'use strict';
   const APP='iec-board-badge', PROTOCOL=1;
   const URL_KEY='iec.board.pwa.gasUrl.v1';
-  const VERSION='2026.11.12-D10';
+  const VERSION='2026.11.12-D11';
   const ENTRY=new URL('./',window.location.href);
   const NOTIFY_KEY='iec.board.pwa.notifications:'+ENTRY.pathname;
   const NOTIFY_TAG=APP+':'+ENTRY.pathname+':snapshot';
@@ -258,7 +258,8 @@
   window.addEventListener('message',function(event){
     const data=event.data;
     if(!data||data.app!==APP||data.protocol!==PROTOCOL||typeof data.pageId!=='string'||!/^[a-f0-9]{32}$/.test(data.pageId))return;
-    if(!validGoogleOrigin(event.origin)||!isChildOfBoard(event.source))return;
+    const nativeP086=event.origin===location.origin&&window.IecNativeHost&&window.IecNativeHost.matches(event.source);
+    if((!validGoogleOrigin(event.origin)&&!nativeP086)||!isChildOfBoard(event.source))return;
     if(data.type==='hello'){
       if(state.source!==event.source||state.pageId!==data.pageId||state.origin!==event.origin){
         pushPending139.forEach(task=>{clearTimeout(task.timer);task.reject(new Error('接続が更新されました。通知設定を開き直してください。'));});pushPending139.clear();
