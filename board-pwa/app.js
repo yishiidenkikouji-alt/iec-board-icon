@@ -5,7 +5,7 @@
   'use strict';
   const APP='iec-board-badge', PROTOCOL=1;
   const URL_KEY='iec.board.pwa.gasUrl.v1';
-  const VERSION='2026.11.11-D5';
+  const VERSION='2026.11.12-D6';
   const ENTRY=new URL('./',window.location.href);
   const NOTIFY_KEY='iec.board.pwa.notifications:'+ENTRY.pathname;
   const NOTIFY_TAG=APP+':'+ENTRY.pathname+':snapshot';
@@ -18,6 +18,7 @@
     badgeRevision:0,lastApplied:null,loadStarted:0,notifyEnabled:false,notifyLast:null
   };
   let lastFocus=null, closeReloadTimer=null,pendingNoticeP015=null;
+  window.IecEntryStartViewP082=()=>pendingNoticeP015?(pendingNoticeP015.view==='talk'?'talk':'inbox'):'personal';
   function acceptNoticeP015(route){
     pendingNoticeP015=route&&route.view==='talk'&&/^(company|reports|health|(?:dm|grp)-[a-f0-9]{32})$/.test(route.room)?{view:'talk',room:route.room}:{view:route&&route.view==='approval'?'approval':'inbox'};
     flushNoticeP015();

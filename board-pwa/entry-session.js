@@ -143,7 +143,7 @@
  */
 (function(){
   'use strict';
-  const APP='iec-device-resume-v1', VERSION='2026.11.11-D5';
+  const APP='iec-device-resume-v1', VERSION='2026.11.12-D6';
   const ROOT=new URL('./',location.href), frame=document.getElementById('boardFrame');
   if(!frame||window.top!==window||location.origin!=='https://yishiidenkikouji-alt.github.io'||ROOT.pathname!=='/iec-board-icon/board-pwa/')return;
   const state={nonce:'',page:'',source:null,origin:'',key:'',lastSeq:0,generation:0};
@@ -172,14 +172,54 @@
     launch('frame-start');
     // A short-lived channel nonce, NOT an identity or a login credential.
     url.searchParams.set('iec_resume_nonce',state.nonce);
-    setStatus('端末保持 D5：GASとの連携を確認中…');return url.href;
+    setStatus('端末保持 D6：GASとの連携を確認中…');return url.href;
   }
+  // P082 capability is learned only from the configured iframe's nonce-bound hello.
+  // It is a transport hint, never an identity or authorization decision.
+  let postTimerP082=null,postP082=null,postFormP082=null,postModeP082='normal',postUrlP082='',postMarksP082={};
+  const capPrefixP082='iec.entry.post.p082:';
+  function capabilityP082(value){try{const key=capPrefixP082+state.key;if(value===undefined)return localStorage.getItem(key)==='P082-POST-1';if(value)localStorage.setItem(key,'P082-POST-1');else localStorage.removeItem(key);}catch(ignore){}return false;}
+  function eventP082(phase){try{window.dispatchEvent(new CustomEvent('iec-entry-navigationP082',{detail:{phase:phase}}));}catch(ignore){}}
+  function stopPostP082(){clearTimeout(postTimerP082);postTimerP082=null;if(postFormP082){postFormP082.remove();postFormP082=null;}}
+  function proofP082(){return postP082?{version:'P082-POST-1',submitted:true,waitMs:Math.round(performance.now()-postP082.started),background:postP082.background}:null;}
+  window.IecEntryPostP082={report:function(){return {version:'P082-POST-1',path:postModeP082,homeMs:postMarksP082.home??null,cardMs:postMarksP082.card??null};}};
+  document.addEventListener('visibilitychange',function(){if(document.hidden&&postP082)postP082.background=true;});
+  function deviceLabelP082(){const ua=String(navigator.userAgent||'');return (/iPhone/i.test(ua)?'iPhone':/iPad/i.test(ua)?'iPad':/Android/i.test(ua)?'Android':/Windows/i.test(ua)?'Windows':'端末')+' / 業務アプリ';}
+  function navigateP082(value,forceLegacy,descriptor){
+    stopPostP082();postP082=null;postUrlP082='';postMarksP082={};postModeP082=forceLegacy?'fallback':'normal';
+    const target=prepare(value),generation=state.generation;let parsed;
+    try{parsed=new URL(target);}catch(ignore){descriptor.set.call(frame,target);return;}
+    const ordinary=state.nonce&&Array.from(parsed.searchParams.keys()).every(k=>k==='iec_resume_nonce');
+    if(forceLegacy||!ordinary||!capabilityP082()){descriptor.set.call(frame,target);return;}
+    const current=()=>state.generation===generation;
+    // Keep the GET path as the bounded fallback for storage failures, old deployments and blocked POSTs.
+    async function start(){
+      try{
+        const saved=await storage().readTicket(state.key,current);
+        if(!current())return;
+        if(!validTicket(saved.ticket)||!/^[a-f0-9]{64}$/.test(saved.revision||'')||document.hidden){descriptor.set.call(frame,target);return;}
+        const action=new URL(target);action.search='';action.hash='';
+        const form=document.createElement('form');form.method='POST';form.action=action.href;form.hidden=true;form.acceptCharset='UTF-8';form.enctype='application/x-www-form-urlencoded';
+        frame.name='iecEntryP082_'+state.nonce;form.target=frame.name;
+        const desired=typeof window.IecEntryStartViewP082==='function'?window.IecEntryStartViewP082():'personal';
+        const fields={p082:'startup-v1',nonce:state.nonce,revision:saved.revision,ticket:saved.ticket,label:deviceLabelP082(),view:['talk','inbox'].includes(desired)?desired:'personal'};
+        for(const [name,value] of Object.entries(fields)){const input=document.createElement('input');input.type='hidden';input.name=name;input.value=value;form.appendChild(input);}
+        document.body.appendChild(form);postFormP082=form;postP082={started:performance.now(),background:false};postUrlP082=target;postModeP082='combined';eventP082('loading');
+        postTimerP082=setTimeout(function(){if(current()&&!state.source){capabilityP082(false);navigateP082(value,true,descriptor);}},25000);
+        form.submit();
+        // Values live only long enough for the browser to serialize this POST.
+        form.remove();postFormP082=null;
+      }catch(ignore){if(!current())return;stopPostP082();postP082=null;postModeP082='fallback';descriptor.set.call(frame,target);}
+    }
+    void start();
+  }
+
   // Only this application's iframe is wrapped. The existing badge code and
   // saved /exec URL remain unchanged; native src getter/setter do navigation.
   try{
     const descriptor=Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype,'src');
     if(!descriptor||!descriptor.get||!descriptor.set)throw new Error('src');
-    Object.defineProperty(frame,'src',{configurable:true,get:function(){return descriptor.get.call(this);},set:function(value){descriptor.set.call(this,prepare(value));}});
+    Object.defineProperty(frame,'src',{configurable:true,get:function(){return postP082?postUrlP082:descriptor.get.call(this);},set:function(value){navigateP082(value,false,descriptor);}});
   }catch(e){diagnostic('unavailable');setStatus('端末保持を準備できませんでした。ブラウザーを確認してください。');return;}
   window.addEventListener('message',function(event){
     const d=event.data;
@@ -188,17 +228,19 @@
       if(state.source&&(state.source!==event.source||state.origin!==event.origin))return;
       if(state.page!==d.page)state.lastSeq=0;
       state.source=event.source;state.origin=event.origin;state.page=d.page;
+      stopPostP082();capabilityP082(d.startupP082==='P082-POST-1');eventP082('ready');
       launch('gas-hello');
       const c=context();
       enqueue(async function(){
         if(!c.current())return;
-        try{const saved=await storage().readTicket(c.key,c.current);if(!c.current())return;diagnostic(saved.ticket?'sent':'empty');launch('ticket-ready');let startupTimingD5=null;try{const diag=window.IecConnectionDiagnosticsD1;if(diag&&diag.timingForApp)startupTimingD5=diag.timingForApp();}catch(ignore){}reply(c,'ready',{revision:saved.revision,ticket:saved.ticket,version:VERSION,startupTimingD5:startupTimingD5});setStatus(saved.ticket?'端末保持 D5：保存した利用者をGASで検証中…':'端末保持 D5：未保存（GASで本人を登録後に保存します）');}
-        catch(e){if(!c.current())return;diagnostic('readError');reply(c,'ready',{revision:'',ticket:'',version:VERSION,error:'端末内の保存情報を読み取れません。情報は消していません。アプリを開き直してください。'});setStatus('端末保持 D5：保存情報を読み取れません（未登録には戻していません）');}
+        try{const saved=await storage().readTicket(c.key,c.current);if(!c.current())return;diagnostic(saved.ticket?'sent':'empty');launch('ticket-ready');let startupTimingD5=null;try{const diag=window.IecConnectionDiagnosticsD1;if(diag&&diag.timingForApp)startupTimingD5=diag.timingForApp();}catch(ignore){}reply(c,'ready',{revision:saved.revision,ticket:saved.ticket,version:VERSION,startupTimingD5:startupTimingD5,postP082:proofP082()});setStatus(saved.ticket?'端末保持 D6：保存した利用者をGASで検証中…':'端末保持 D6：未保存（GASで本人を登録後に保存します）');}
+        catch(e){if(!c.current())return;diagnostic('readError');reply(c,'ready',{revision:'',ticket:'',version:VERSION,error:'端末内の保存情報を読み取れません。情報は消していません。アプリを開き直してください。'});setStatus('端末保持 D6：保存情報を読み取れません（未登録には戻していません）');}
       });
       return;
     }
     if(event.source!==state.source||event.origin!==state.origin||d.page!==state.page||!Number.isSafeInteger(d.seq)||d.seq<=state.lastSeq)return;
     state.lastSeq=d.seq;
+    if(d.type==='performanceP082'){if(!['home','card'].includes(d.phase))return;if(postMarksP082[d.phase]===undefined)postMarksP082[d.phase]=Math.round(performance.now());reply(context(),'performanceP082',{phase:d.phase,entryMs:postMarksP082[d.phase]});return;}
     if(d.type!=='save'&&d.type!=='remove')return;
     const c=context(),request={type:d.type,requestId:String(d.requestId||''),expectedRevision:d.expectedRevision,ticket:d.ticket};
     enqueue(async function(){
@@ -209,16 +251,16 @@
         const saved=await storage().writeTicket(c.key,request.expectedRevision,request.type==='save'?request.ticket:'',c.current);
         if(!c.current())return;
         ack.revision=saved.revision;ack.ok=true;
-        setStatus(request.type==='save'?'端末保持 D5：この端末に保存確認済み':'端末保持 D5：登録解除済み');
+        setStatus(request.type==='save'?'端末保持 D6：この端末に保存確認済み':'端末保持 D6：登録解除済み');
       }catch(e){ack.reason=e.code==='conflict'?'conflict':'storage';ack.error=String(e&&e.message||'端末への保存に失敗しました。');}
       if(!c.current())return;
       diagnostic(ack.ok?(request.type==='save'?'saved':'removed'):(ack.reason==='conflict'?'conflict':'writeError'));
       reply(c,'ack',ack);
     });
   });
-  // Deliberately no transmission of tickets in URLs, logs, analytics, or fetch.
+  // Tickets are sent only to the configured GAS origin in POST bodies or the nonce-bound bridge; never URLs, logs or analytics.
   const el=document.getElementById('entrySessionVersion');if(el)el.textContent=VERSION;
-  setStatus('端末保持 D5：接続先の設定を待っています');
+  setStatus('端末保持 D6：接続先の設定を待っています');
 })();
 
 

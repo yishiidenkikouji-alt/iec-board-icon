@@ -1,34 +1,40 @@
-## Entry startup
+# Normal business app startup — P82 / D6
 
-`index.html` loads `config.js`, then the generated `entry-startup.js`.
-The bundle contains the connection diagnostic, device storage and app modules
-in their original execution order. It reduces the critical entry scripts from
-four requests to two. `config.js` remains independently editable.
+The entry stays at `board-pwa/`. Retired P076–P081 trial bookmarks redirect here.
+Their executable JS, CSS and test suites have been removed. No trial worker is
+started by this entry. The GAS replacement separately retires trial triggers.
 
-After editing `connection-diagnostics.js`, `entry-session.js` or `app.js`:
+For an existing registration, a nonce-bound hello from the configured GAS frame
+advertises `P082-POST-1`. The next ordinary launch may send its signed restart
+ticket in a native HTTPS form POST, targeting the normal application iframe.
+The GAS response contains the normal application plus the result of the existing
+live ticket/role/policy/own-card checks. It removes the separate startup RPC.
+No claim is made that the entire application starts in the trial's 0.88 seconds.
+
+First registration, legacy GAS, special routes, storage errors and unsupported
+clients keep normal GET + RPC startup. A POST without a validated hello falls
+back to GET after 25 seconds and clears only the transport capability hint.
+It does not erase a saved registration. A mixed release, ticket/revision change,
+hidden document or stale response uses the ordinary live RPC in the child.
+
+The ticket is never in a URL, exported diagnostic or public shell cache. The
+parent rereads the current authoritative record at hello. The child checks the
+response nonce, revision and SHA-256 of that current ticket before adoption.
+All previous origin/source/page binding, CAS writes and tombstones remain.
+
+`index.html` loads `config.js`, then the generated `entry-startup.js`. The bundle
+contains diagnostics, device storage and the normal app in order. After edits:
 
 ```sh
 node scripts/build-entry.cjs
 node scripts/build-entry.cjs --check
-node tests/connection-diagnostics.cjs
-node tests/device-retention.cjs
-node tests/entry-startup.cjs
-node tests/badge-sync.cjs
+node --test tests/*.cjs
 ```
 
-Bump the public shell cache version in `sw.js` when publishing a new bundle.
-Keep the old module URLs in the public cache allowlist for already-open pages.
-Never bundle GAS source, device tickets, user data or any runtime credentials.
+Bump the shell cache version in `sw.js`. Its allowlist remains public files only;
+GAS HTML, private responses and credentials are never service-worker cached.
 
-The D4 diagnostic times the parent entry page through the validated GAS hello
-and device-ticket read. It does not measure browser launch before navigation,
-claim a successful identity check, or export private device values.
-# D5 timing handoff
-
-D5 adds a bounded numeric `startupTimingD5` projection to the existing validated
-restart `ready` reply. P75 includes it in the local loading diagnostic, so one
-report can contain entry and app timings from the same navigation. Older GAS
-versions ignore the optional field. Timing failure does not block restoration.
-No extra requests, messages, persisted values, or changes to credentials are
-introduced. D4 storage behavior and all nonce/origin/source checks remain.
-
+D6 retains the bounded D5 timing handoff. P82 additionally reports first home
+and card readiness on the parent entry's clock. These times begin with page
+navigation, not tapping the OS home icon, and include the combined server wait.
+Only fixed phase names and bounded numeric times enter shared diagnostics.
