@@ -5,11 +5,14 @@
 'use strict';
 const ROOT=new URL('./',self.location.href);
 const PREFIX='iec-board-pwa-shell:'+ROOT.pathname+':';
-const CACHE=PREFIX+'v52-p083-delivery';
-const FILES=['./','./index.html','./styles.css','./config.js','./entry-startup.js','./connection-diagnostics.js','./entry-session.js','./app.js','./push139.js','./settings-menu.js','./manifest.webmanifest'];
+const CACHE=PREFIX+'v53-entry-d9';
+const FILES=['./','./index.html','./styles.css','./config.js','./entry-startup-d9.js','./entry-startup.js','./connection-diagnostics.js','./entry-session.js','./app.js','./push139.js','./settings-menu.js','./manifest.webmanifest'];
 const PUBLIC_URLS=FILES.map(path=>new URL(path,ROOT).href);
 self.addEventListener('install',event=>{
-  event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(PUBLIC_URLS)).then(()=>self.skipWaiting()));
+  // Do not populate a new shell cache from still-fresh older HTTP responses.
+  // A failed install leaves the previous worker available; never erase tickets.
+  const requests=PUBLIC_URLS.map(url=>new Request(url,{cache:'reload',credentials:'same-origin'}));
+  event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(requests)).then(()=>self.skipWaiting()));
 });
 self.addEventListener('activate',event=>{
   event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key.startsWith(PREFIX)&&key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim()));

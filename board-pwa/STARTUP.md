@@ -1,6 +1,6 @@
-# Normal business app startup — P83 delivery / D8
+# Normal business app startup — P83 delivery / D9
 
-D8 learns the optional `P083-DELIVERY-1` capability from the same validated
+D9 learns the optional `P083-DELIVERY-1` capability from the same validated
 GAS hello used for P82. Only after that, four fixed, integrity-pinned public
 program resources can be preloaded from the existing dedicated Firebase
 Hosting site. This repository contains their URLs and hashes, not the private
@@ -17,6 +17,16 @@ The P82 POST timeout also falls back to inline mode. No popup is opened.
 This reduces repeated HTML delivery, not the platform's execution startup
 latency. First download and cache eviction still require the public resources.
 Live iPhone measurements are required before claiming a time reduction.
+
+D9 uses a new bundle filename so an older shell worker cannot substitute its
+previous cached bundle for the new index. Installation requests bypass the
+HTTP cache before populating the new public shell cache. The legacy bundle is
+kept for indexes already cached on devices. There is no forced page reload,
+registration reset or new icon. A completed worker update takes effect on the
+next entry navigation. Connection diagnostics report the actual entry version,
+the delivery request, the validated server capability and any inline fallback.
+A request for assets is not proof that the server used them; confirm
+`deliveryP083.mode=assets` and four loaded resources in the app diagnostic.
 
 The entry stays at `board-pwa/`. Retired P076–P081 trial bookmarks redirect here.
 Their executable JS, CSS and test suites have been removed. No trial worker is
@@ -42,7 +52,7 @@ parent rereads the current authoritative record at hello. The child checks the
 response nonce, revision and SHA-256 of that current ticket before adoption.
 All previous origin/source/page binding, CAS writes and tombstones remain.
 
-`index.html` loads `config.js`, then the generated `entry-startup.js`. The bundle
+`index.html` loads `config.js`, then the generated `entry-startup-d9.js`. The bundle
 contains diagnostics, device storage and the normal app in order. After edits:
 
 ```sh

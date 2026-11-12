@@ -75,3 +75,22 @@ test('P83 preloads four fixed integrity-pinned public programs, without executin
  for(const l of links){assert.equal(l.tagName,'link');assert.equal(l.rel,'preload');assert.equal(l.as,'script');assert.equal(l.crossOrigin,'anonymous');assert.equal(l.referrerPolicy,'no-referrer');assert(/^sha384-/.test(l.integrity));assert.equal(new URL(l.href).origin,'https://ishii-board-p003-startup-p076.web.app');assert(!l.href.includes(ticket));}
  e.frame.src=url;await settle();assert.equal(links.length,4);
 });
+
+test('delivery diagnosis distinguishes request, validated capability, and fallback without exposing saved credentials',async()=>{
+ const e=make();assert.equal(e.ctx.IecEntryDeliveryP083.report().request,'not-started');
+ e.frame.src=url;await settle();assert.equal(e.ctx.IecEntryDeliveryP083.report().request,'inline');
+ const hello={...e.ready(),deliveryP083:'P083-DELIVERY-1'};
+ await e.message(hello,'https://evil.invalid');assert.equal(e.ctx.IecEntryDeliveryP083.report().advertised,null);
+ await e.message(hello);await settle();assert.equal(e.ctx.IecEntryDeliveryP083.report().advertised,true);
+ assert.match(e.open(),/分割配信の要求：なし/);assert.match(e.text(),/GASからの分割配信対応通知：対応/);
+ e.frame.src=url;await settle();assert.equal(e.ctx.IecEntryDeliveryP083.report().request,'assets');
+ assert.equal(e.forms.at(-1).fields.delivery,'P083');assert.match(e.open(),/分割配信の要求：あり/);
+ assert.match(e.text(),/GASからの分割配信対応通知：未受信/);
+ await e.message({app:'iec-delivery-p083',version:'P083-DELIVERY-1',type:'fallback',nonce:e.ready().nonce});await settle();
+ const r=e.ctx.IecEntryDeliveryP083.report();assert.equal(r.request,'inline');assert.equal(r.fallback,'resource');
+ assert.match(e.open(),/従来配信への切替：ファイル読み込み失敗/);await e.click('結果をコピー');
+ for(const secret of [url,ticket,revision,e.ready().nonce,hello.page]){assert(!JSON.stringify(r).includes(secret));assert(!e.ctx.copied.includes(secret));}
+ const timed=make();timed.map.set('iec.entry.delivery.p083:'+key,'P083-DELIVERY-1');timed.frame.src=url;await settle();
+ [...timed.timers.values()].find(t=>t.ms===25000).fn();await settle();
+ assert.equal(timed.ctx.IecEntryDeliveryP083.report().fallback,'timeout');assert.match(timed.open(),/従来配信への切替：応答待ち上限/);
+});
