@@ -5,7 +5,7 @@
 'use strict';
 const ROOT=new URL('./',self.location.href);
 const PREFIX='iec-board-pwa-shell:'+ROOT.pathname+':';
-const CACHE=PREFIX+'v48-p076-entry-route';
+const CACHE=PREFIX+'v49-p081-direct-entry';
 const FILES=['./','./index.html','./styles.css','./config.js','./entry-startup.js','./connection-diagnostics.js','./entry-session.js','./app.js','./push139.js','./settings-menu.js','./manifest.webmanifest'];
 const PUBLIC_URLS=FILES.map(path=>new URL(path,ROOT).href);
 self.addEventListener('install',event=>{

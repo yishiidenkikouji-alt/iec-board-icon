@@ -55,7 +55,7 @@ test('origin/source/nonce gates remain required; copied diagnostics contain no t
 });
 test('regular app link navigates within the same installed-app scope without credentials',()=>{
  const html=fs.readFileSync(path.join(dir,'index.html'),'utf8'),match=html.match(/<a href="([^"]+)" target="_self">起動速度を試す<\/a>/);assert(match);
- const target=new URL(match[1],ROOT);assert.equal(target.origin,new URL(ROOT).origin);assert.equal(target.pathname,'/iec-board-icon/board-pwa/startup-trial.html');assert.deepEqual([...target.searchParams.keys()],['v']);
+ const target=new URL(match[1],ROOT);assert.equal(target.origin,new URL(ROOT).origin);assert.equal(target.pathname,'/iec-board-icon/board-pwa/startup-sync.html');assert.deepEqual([...target.searchParams.keys()],['v']);
  const manifest=JSON.parse(fs.readFileSync(path.join(dir,'manifest.webmanifest'),'utf8'));assert(target.href.startsWith(new URL(manifest.scope,ROOT).href));
- const sw=fs.readFileSync(path.join(dir,'sw.js'),'utf8');assert(sw.includes('v48-p076-entry-route'));assert(!sw.includes("'./startup-trial.html'"));
+ const sw=fs.readFileSync(path.join(dir,'sw.js'),'utf8');assert(sw.includes('v49-p081-direct-entry'));assert(!sw.includes("'./startup-trial.html'"));assert(!sw.includes("'./startup-sync.html'"));
 });
