@@ -51,3 +51,27 @@ test('unavailable or already navigated iframe uses GET immediately without a par
 test('a missing body or different content window cannot receive the transient credential form',async()=>{
  for(const change of [e=>e.childDocument.body=null,e=>e.childDocument.defaultView={}]){const e=make();change(e);e.frame.src=url;await settle();assert.equal(e.forms.length,0);assert.equal(e.parentForms.length,0);assert.equal(e.ctx.IecEntryPostP082.report().path,'fallback');assert.equal(e.map.get(key),stored);}
 });
+
+test('P83 delivery capability is learned only from the configured nonce-bound hello',async()=>{
+ const e=make(),delivery='iec.entry.delivery.p083:'+key;e.frame.src=url;await settle();const d={...e.ready(),deliveryP083:'P083-DELIVERY-1'};
+ for(const [msg,origin,source] of [[d,'https://evil.invalid',undefined],[{...d,nonce:'0'.repeat(64)},'https://script.google.com',undefined],[d,'https://script.google.com',{}]])await e.message(msg,origin,source);
+ assert(!e.map.has(delivery));await e.message(d);await settle();assert.equal(e.map.get(delivery),'P083-DELIVERY-1');
+ e.frame.src=url;await settle();assert.equal(e.forms.at(-1).fields.delivery,'P083');assert.equal(new URL(e.frame.src).searchParams.get('iec_delivery'),'P083');assert(!e.frame.src.includes(ticket));await e.message(e.ready());await settle();assert(!e.map.has(delivery));
+});
+test('P83 external failure falls back once inside the same iframe and preserves registration',async()=>{
+ const e=make();e.map.set('iec.entry.delivery.p083:'+key,'P083-DELIVERY-1');e.frame.src=url;await settle();const before=e.ready(),d={app:'iec-delivery-p083',version:'P083-DELIVERY-1',type:'fallback',nonce:before.nonce,url:'https://evil.invalid'};
+ await e.message(d,'https://evil.invalid');await e.message({...d,nonce:'0'.repeat(64)});await e.message(d,'https://script.google.com',{});assert.equal(e.ready().nonce,before.nonce);
+ await e.message(d);await settle();assert.equal(new URL(e.frame.src).searchParams.get('iec_delivery'),'inline');assert.equal(new URL(e.frame.src).origin,'https://script.google.com');assert.equal(e.forms.length,1);assert.equal(e.map.get(key),stored);assert.equal(e.parentForms.length,0);
+ const current=e.ready().nonce;await e.message({...d,nonce:current});await settle();assert.equal(e.ready().nonce,current);await e.message(before);await settle();assert.equal(e.replies.length,0);
+});
+test('P83 timeout and already-navigated iframe remain on the bounded GET fallback',async()=>{
+ const e=make();e.map.set('iec.entry.delivery.p083:'+key,'P083-DELIVERY-1');e.frame.src=url;await settle();[...e.timers.values()].find(x=>x.ms===25000).fn();await settle();assert.equal(new URL(e.frame.src).searchParams.get('iec_delivery'),'inline');assert.equal(e.forms.length,1);assert.equal(e.map.get(key),stored);
+});
+test('P83 fallback remains available if capability storage is lost during the request',async()=>{
+ const e=make();const k='iec.entry.delivery.p083:'+key;e.map.set(k,'P083-DELIVERY-1');e.frame.src=url;await settle();e.map.delete(k);await e.message({app:'iec-delivery-p083',version:'P083-DELIVERY-1',type:'fallback',nonce:e.ready().nonce});await settle();assert.equal(new URL(e.frame.src).searchParams.get('iec_delivery'),'inline');assert.equal(e.map.get(key),stored);
+});
+test('P83 preloads four fixed integrity-pinned public programs, without executing code in the entry',async()=>{
+ const e=make();e.ctx.document.head=e.ctx.document.createElement('head');e.map.set('iec.entry.delivery.p083:'+key,'P083-DELIVERY-1');e.frame.src=url;await settle();const links=e.ctx.document.head.children;assert.equal(links.length,4);assert.equal(new Set(links.map(x=>x.href)).size,4);
+ for(const l of links){assert.equal(l.tagName,'link');assert.equal(l.rel,'preload');assert.equal(l.as,'script');assert.equal(l.crossOrigin,'anonymous');assert.equal(l.referrerPolicy,'no-referrer');assert(/^sha384-/.test(l.integrity));assert.equal(new URL(l.href).origin,'https://ishii-board-p003-startup-p076.web.app');assert(!l.href.includes(ticket));}
+ e.frame.src=url;await settle();assert.equal(links.length,4);
+});

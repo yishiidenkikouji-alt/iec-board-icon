@@ -1,4 +1,22 @@
-# Normal business app startup — P82 / D7
+# Normal business app startup — P83 delivery / D8
+
+D8 learns the optional `P083-DELIVERY-1` capability from the same validated
+GAS hello used for P82. Only after that, four fixed, integrity-pinned public
+program resources can be preloaded from the existing dedicated Firebase
+Hosting site. This repository contains their URLs and hashes, not the private
+GAS application source or runtime business data. The source and Hosting deploy
+package are delivered separately.
+
+The server defaults to the full inline app until its owner enables P83 after
+checking the uploaded files. Old P82 deployments and D7 clients stay compatible.
+A missing resource or integrity failure sends a nonce-bound fallback request;
+the parent navigates its existing iframe once to the saved GAS URL in inline
+mode. It never accepts a destination from the message or clears registration.
+The P82 POST timeout also falls back to inline mode. No popup is opened.
+
+This reduces repeated HTML delivery, not the platform's execution startup
+latency. First download and cache eviction still require the public resources.
+Live iPhone measurements are required before claiming a time reduction.
 
 The entry stays at `board-pwa/`. Retired P076–P081 trial bookmarks redirect here.
 Their executable JS, CSS and test suites have been removed. No trial worker is
