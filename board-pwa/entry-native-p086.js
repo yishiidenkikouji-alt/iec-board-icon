@@ -12,16 +12,33 @@
  // A capability hint only. Every read still requires current server authorization.
  function cardCapability(value){try{if(value===undefined)return localStorage.getItem(CARD_CAP)==='P086-CARD-1';if(value)localStorage.setItem(CARD_CAP,'P086-CARD-1');else localStorage.removeItem(CARD_CAP);}catch(ignore){}return false;}
  function wantsCard(){try{return typeof window.IecEntryStartViewP082!=='function'||window.IecEntryStartViewP082()==='personal';}catch(ignore){return false;}}
- function selected(){try{return localStorage.getItem(CHOICE)==='1';}catch(ignore){return false;}}
- function enabled(){const c=window.IEC_PWA_CONFIG||{};return c.nativeP086===true||(c.nativeP086OptIn===true&&selected());}
+ function selected(){try{const value=localStorage.getItem(CHOICE);if(value==='0'||value==='1')return value==='1';}catch(ignore){}return (window.IEC_PWA_CONFIG||{}).nativeP086===true;}
+ function enabled(){const c=window.IEC_PWA_CONFIG||{};return (c.nativeP086===true||c.nativeP086OptIn===true)&&selected();}
  function choose(value){
   if(typeof value!=='boolean')throw Error('起動方式を確認してください。');
   localStorage.setItem(CHOICE,value?'1':'0');
   if(localStorage.getItem(CHOICE)!==(value?'1':'0'))throw Error('起動方式を保存できませんでした。');
   return value;
  }
- let sdkPromise=null,active=null,signInQueue=Promise.resolve();
- document.addEventListener('visibilitychange',()=>{if(document.hidden&&active&&(active.metrics.latestCardMs===null||active.metrics.talkReadyMs===null))active.background=true;});
+ let sdkPromise=null,active=null,signInQueue=Promise.resolve(),loadCheckRunning=false,lastLoadCheckAt=0,loadCheckBackground=false;
+ // A manually invoked, bounded own-card read. It is not a 15-device startup test.
+ async function measureConcurrentReads(){
+  const s=active;
+  if(loadCheckRunning)throw Error('速度確認を実行中です。完了までお待ちください。');
+  if(lastLoadCheckAt&&Date.now()-lastLoadCheckAt<600000)throw Error('速度確認は10分に1回です。通常の操作は続けられます。');
+  if(!s||!s.current()||!s.attached||!s.measureRead||s.metrics.latestCardMs===null||document.hidden)throw Error('最新カードが表示されてから実行してください。');
+  loadCheckRunning=true;lastLoadCheckAt=Date.now();loadCheckBackground=false;
+  try{
+   const at=new Date().toISOString(),baseline=await s.measureRead();
+   if(!baseline.ok)return {version:'P086-CONCURRENT-READ-1',at,background:loadCheckBackground,scope:'same-session-own-card-read',requestedConcurrency:15,baseline,concurrent:null};
+   const started=performance.now(),samples=await Promise.all(Array.from({length:15},()=>s.measureRead()));
+   const successful=samples.filter(x=>x.ok).map(x=>x.elapsedMs).sort((a,b)=>a-b),percentile=p=>successful.length?successful[Math.ceil(successful.length*p)-1]:null;
+   return {version:'P086-CONCURRENT-READ-1',at,background:loadCheckBackground,scope:'same-session-own-card-read',requestedConcurrency:15,baseline,
+    concurrent:{requests:15,successful:successful.length,failed:15-successful.length,batchMs:Math.round(performance.now()-started),
+     minMs:successful.length?successful[0]:null,medianMs:percentile(.5),p95Ms:percentile(.95),maxMs:successful.length?successful.at(-1):null,samples}};
+  }finally{loadCheckRunning=false;}
+ }
+ document.addEventListener('visibilitychange',()=>{if(document.hidden&&loadCheckRunning)loadCheckBackground=true;if(document.hidden&&active&&(active.metrics.latestCardMs===null||active.metrics.talkReadyMs===null))active.background=true;});
  const number=v=>typeof v==='number'&&Number.isFinite(v)&&v>=0&&v<=86400000?Math.round(v):null;
  function numbers(source,keys){const out={};for(const k of keys)out[k]=number(source&&source[k]);return out;}
  function currentDiagnostics(){
@@ -78,6 +95,18 @@
     return data.result;
    }finally{clearTimeout(timer);}
   }
+  s.measureRead=async()=>{
+   const started=performance.now();
+   try{
+    if(!current()||document.hidden)throw Object.assign(Error('stopped'),{code:'STOPPED'});
+    const result=await request({op:'startupCard',requestId:random()});
+    return {ok:true,elapsedMs:Math.round(performance.now()-started),transport:numbers(result&&result.nativeReadP086,
+     ['cloudAuthMs','upstreamMs','cloudTotalMs','gasRequestMs','gasDispatchMs','upstreamPostMs','upstreamRedirectMs'])};
+   }catch(e){
+    if(['AUTH','RECONNECT'].includes(e.code))invalidate();
+    return {ok:false,elapsedMs:Math.round(performance.now()-started),code:['AUTH','RECONNECT','REQUEST','RPC','UNAVAILABLE','RATE_LIMIT','STOPPED'].includes(e.code)?e.code:'UNKNOWN'};
+   }
+  };
   function discardCard(reason,method){
    const p=s.card||s.claimedCard;if(!p)return;
    p.invalidated=true;clearTimeout(p.expiry);s.card=null;s.claimedCard=null;
@@ -166,6 +195,6 @@
   }
   void launch().catch(failBeforeStart);return true;
  }
- window.IecNativeP086=Object.freeze({start,cancel,selected,choose,diagnostics:currentDiagnostics,active:()=>!!(active&&active.attached&&!active.cancelled)});
+ window.IecNativeP086=Object.freeze({start,cancel,selected,choose,diagnostics:currentDiagnostics,measureConcurrentReads,active:()=>!!(active&&active.attached&&!active.cancelled)});
 })();
 

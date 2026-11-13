@@ -6,8 +6,8 @@
  */
 window.IEC_PWA_CONFIG = Object.freeze({
   gasUrl: 'https://script.google.com/macros/s/AKfycbyDl12j_i0NvCN45tSVgM0ngzAWE73hpuz69Mm9MMRQT_gZkrNJXgJNlGqAee-YG_7c/exec',
-  nativeP086: false, // Keep general rollout off; server authorization remains authoritative.
-  nativeP086OptIn: true, // Verified backend; enable on an invited device through connection diagnostics.
-  version: '2026.11.06-D3'
+  nativeP086: true, // Default for existing authorized users; server checks remain authoritative.
+  nativeP086OptIn: true, // Keep a per-device fallback choice in connection diagnostics.
+  version: '2026.11.13-D16'
 });
 

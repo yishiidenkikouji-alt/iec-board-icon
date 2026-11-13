@@ -8,7 +8,7 @@
   'use strict';
   const ROOT=new URL('./',location.href);
   if(window.top!==window||ROOT.origin!=='https://yishiidenkikouji-alt.github.io'||ROOT.pathname!=='/iec-board-icon/board-pwa/')return;
-  const VERSION='2026.11.13-D15',URL_KEY='iec.board.pwa.gasUrl.v1';
+  const VERSION='2026.11.13-D16',URL_KEY='iec.board.pwa.gasUrl.v1';
   const PREFIX='iec.entry.resume.v1:'+ROOT.pathname+':';
   const TEST_KEY='iec.entry.diagnostic.v1:'+ROOT.pathname;
   const EXPECTED='https://script.google.com/macros/s/AKfycbyDl12j_i0NvCN45tSVgM0ngzAWE73hpuz69Mm9MMRQT_gZkrNJXgJNlGqAee-YG_7c/exec';
@@ -62,12 +62,12 @@
     connection:{saved:'端末の保存設定',backup:'端末の予備保存',common:'会社の共通設定',empty:'接続先なし',error:'予備保存の確認に失敗'}
   };
   const storageState={backup:'checking',protection:'unchecked',connection:'empty'};
-  const floating=document.createElement('button');floating.type='button';floating.id='connectionDiagnosticLauncherD3';floating.textContent='接続診断 D15';floating.setAttribute('aria-haspopup','dialog');
+  const floating=document.createElement('button');floating.type='button';floating.id='connectionDiagnosticLauncherD3';floating.textContent='接続診断 D16';floating.setAttribute('aria-haspopup','dialog');
   // Reserve space outside the application frame. A fixed bottom launcher covered
   // the talk submit button, especially when its composer wrapped on a phone.
   floating.style.cssText='min-height:44px;padding:9px 12px;border:1px solid #52687c;border-radius:10px;background:#fff;color:#203040;font:14px/1.4 system-ui,sans-serif;';
   const launcherDock=document.createElement('div'),entryBar=document.getElementById('entryBar');
-  launcherDock.id='connectionDiagnosticDockD15';
+  launcherDock.id='connectionDiagnosticDockD16';
   launcherDock.style.cssText='order:-1;flex:0 0 auto;display:flex;justify-content:flex-end;padding:2px max(8px,env(safe-area-inset-right,0px)) 2px max(8px,env(safe-area-inset-left,0px));background:#eceff1;';
   floating.onclick=open;launcherDock.appendChild(floating);document.body.appendChild(launcherDock);
   function launcherVisibility(){launcherDock.hidden=!!(entryBar&&!entryBar.hidden)||(bridgeStatus==='ready'&&!(window.IEC_PWA_CONFIG||{}).nativeP086OptIn);}
@@ -111,7 +111,7 @@
     if(!panel){
       panel=document.createElement('dialog');panel.id='connectionDiagnosticD1';panel.setAttribute('aria-label','接続診断');
       panel.style.cssText='box-sizing:border-box;width:calc(100% - 24px);max-width:620px;max-height:90dvh;overflow:auto;border:1px solid #b9c8d5;border-radius:12px;background:#fff;color:#203040;padding:18px;font:15px/1.6 system-ui,sans-serif;';
-      const h=document.createElement('h2');h.textContent='接続診断 D15';h.style.margin='0 0 8px';panel.appendChild(h);
+      const h=document.createElement('h2');h.textContent='接続診断 D16';h.style.margin='0 0 8px';panel.appendChild(h);
       if(window.IecNativeP086&&typeof window.IecNativeP086.diagnostics==='function'){
         const copy=document.createElement('button');copy.type='button';copy.textContent='今回の起動診断をコピー';copy.style.cssText='padding:10px 12px;min-height:44px;font:inherit;';
         copy.onclick=async function(){
@@ -125,7 +125,7 @@
       }
       if((window.IEC_PWA_CONFIG||{}).nativeP086OptIn===true&&window.IecNativeP086){
         const native=window.IecNativeP086,description=document.createElement('p'),choice=document.createElement('button'),notice=document.createElement('p');
-        description.textContent='起動方式の切り替え：利用を案内された端末で設定してください。設定は次回起動から適用されます。';
+        description.textContent='新しい起動方式が標準です。この端末だけ通常の起動方式に戻すこともできます。設定は次回起動から適用されます。';
         choice.type='button';choice.id='nativeStartupChoiceP086';choice.style.cssText='padding:10px 12px;min-height:44px;font:inherit;';
         const label=()=>{choice.textContent=native.selected()?'通常の起動方式に戻す':'新しい起動方式を使う';};
         label();notice.setAttribute('role','status');
@@ -136,6 +136,22 @@
       output=document.createElement('textarea');output.readOnly=true;output.setAttribute('aria-label','共有用の診断結果');output.style.cssText='box-sizing:border-box;width:100%;height:42vh;min-height:180px;font:14px/1.6 system-ui,sans-serif;color:#203040;background:#f4f7fa;';panel.appendChild(output);
       const status=document.createElement('p');status.setAttribute('role','status');panel.appendChild(status);
       function button(text,fn){const b=document.createElement('button');b.type='button';b.textContent=text;b.style.cssText='margin:4px;padding:10px 12px;min-height:44px;font:inherit;';b.onclick=fn;panel.appendChild(b);return b;}
+      if(window.IecNativeP086&&typeof window.IecNativeP086.measureConcurrentReads==='function'){
+        const help=document.createElement('p');help.textContent='速度確認用：最新カードを1回、その後15件同時に読み込みます。1人の接続を使うため、15台の画面表示時間とは別の測定です。保存・送信操作は行いません。測定中はこの画面を開いたままお待ちください。';panel.appendChild(help);
+        let loadReport=null;
+        const measure=button('15件同時の速度を測る',async function(){
+          if(measure.disabled)return;measure.disabled=true;status.textContent='速度を測定しています。通常は1分以内、混雑時は最大約3分かかります。';
+          try{loadReport=await window.IecNativeP086.measureConcurrentReads();output.value=JSON.stringify(loadReport,null,2);copyLoad.hidden=false;
+            status.textContent=loadReport.concurrent&&loadReport.concurrent.failed===0?'速度確認が完了しました。「速度確認の結果をコピー」で共有してください。':'読み込めなかった結果も含めて記録しました。「速度確認の結果をコピー」で共有してください。';
+          }catch(ignore){status.textContent='速度確認を開始できませんでした。最新カードが表示されていることを確認してください。再測定は10分後から可能です。';}
+          finally{measure.disabled=false;}
+        });
+        const copyLoad=button('速度確認の結果をコピー',async function(){
+          if(!loadReport)return;output.value=JSON.stringify(loadReport,null,2);
+          try{await navigator.clipboard.writeText(output.value);status.textContent='速度確認の結果をコピーしました。そのまま貼り付けて送ってください。';}
+          catch(ignore){output.focus();output.select();status.textContent='選択した速度確認の結果をコピーしてください。';}
+        });copyLoad.hidden=true;
+      }
       button('結果をコピー',async function(){refresh();try{await navigator.clipboard.writeText(output.value);status.textContent='診断結果をコピーしました。管理者へ貼り付けて送ってください。';}catch(e){output.focus();output.select();status.textContent='コピーできませんでした。選択した文字をコピーするか、この画面のスクショを送ってください。';}});
       button('保存テスト',function(){
         try{const text=JSON.stringify({v:1,at:Date.now()});localStorage.setItem(TEST_KEY,text);testResult=localStorage.getItem(TEST_KEY)===text?'書き込み・読み戻し成功':'書き込み後の内容が一致しません';}catch(e){testResult='書き込み・読み戻し失敗';}
@@ -172,16 +188,33 @@
  // A capability hint only. Every read still requires current server authorization.
  function cardCapability(value){try{if(value===undefined)return localStorage.getItem(CARD_CAP)==='P086-CARD-1';if(value)localStorage.setItem(CARD_CAP,'P086-CARD-1');else localStorage.removeItem(CARD_CAP);}catch(ignore){}return false;}
  function wantsCard(){try{return typeof window.IecEntryStartViewP082!=='function'||window.IecEntryStartViewP082()==='personal';}catch(ignore){return false;}}
- function selected(){try{return localStorage.getItem(CHOICE)==='1';}catch(ignore){return false;}}
- function enabled(){const c=window.IEC_PWA_CONFIG||{};return c.nativeP086===true||(c.nativeP086OptIn===true&&selected());}
+ function selected(){try{const value=localStorage.getItem(CHOICE);if(value==='0'||value==='1')return value==='1';}catch(ignore){}return (window.IEC_PWA_CONFIG||{}).nativeP086===true;}
+ function enabled(){const c=window.IEC_PWA_CONFIG||{};return (c.nativeP086===true||c.nativeP086OptIn===true)&&selected();}
  function choose(value){
   if(typeof value!=='boolean')throw Error('起動方式を確認してください。');
   localStorage.setItem(CHOICE,value?'1':'0');
   if(localStorage.getItem(CHOICE)!==(value?'1':'0'))throw Error('起動方式を保存できませんでした。');
   return value;
  }
- let sdkPromise=null,active=null,signInQueue=Promise.resolve();
- document.addEventListener('visibilitychange',()=>{if(document.hidden&&active&&(active.metrics.latestCardMs===null||active.metrics.talkReadyMs===null))active.background=true;});
+ let sdkPromise=null,active=null,signInQueue=Promise.resolve(),loadCheckRunning=false,lastLoadCheckAt=0,loadCheckBackground=false;
+ // A manually invoked, bounded own-card read. It is not a 15-device startup test.
+ async function measureConcurrentReads(){
+  const s=active;
+  if(loadCheckRunning)throw Error('速度確認を実行中です。完了までお待ちください。');
+  if(lastLoadCheckAt&&Date.now()-lastLoadCheckAt<600000)throw Error('速度確認は10分に1回です。通常の操作は続けられます。');
+  if(!s||!s.current()||!s.attached||!s.measureRead||s.metrics.latestCardMs===null||document.hidden)throw Error('最新カードが表示されてから実行してください。');
+  loadCheckRunning=true;lastLoadCheckAt=Date.now();loadCheckBackground=false;
+  try{
+   const at=new Date().toISOString(),baseline=await s.measureRead();
+   if(!baseline.ok)return {version:'P086-CONCURRENT-READ-1',at,background:loadCheckBackground,scope:'same-session-own-card-read',requestedConcurrency:15,baseline,concurrent:null};
+   const started=performance.now(),samples=await Promise.all(Array.from({length:15},()=>s.measureRead()));
+   const successful=samples.filter(x=>x.ok).map(x=>x.elapsedMs).sort((a,b)=>a-b),percentile=p=>successful.length?successful[Math.ceil(successful.length*p)-1]:null;
+   return {version:'P086-CONCURRENT-READ-1',at,background:loadCheckBackground,scope:'same-session-own-card-read',requestedConcurrency:15,baseline,
+    concurrent:{requests:15,successful:successful.length,failed:15-successful.length,batchMs:Math.round(performance.now()-started),
+     minMs:successful.length?successful[0]:null,medianMs:percentile(.5),p95Ms:percentile(.95),maxMs:successful.length?successful.at(-1):null,samples}};
+  }finally{loadCheckRunning=false;}
+ }
+ document.addEventListener('visibilitychange',()=>{if(document.hidden&&loadCheckRunning)loadCheckBackground=true;if(document.hidden&&active&&(active.metrics.latestCardMs===null||active.metrics.talkReadyMs===null))active.background=true;});
  const number=v=>typeof v==='number'&&Number.isFinite(v)&&v>=0&&v<=86400000?Math.round(v):null;
  function numbers(source,keys){const out={};for(const k of keys)out[k]=number(source&&source[k]);return out;}
  function currentDiagnostics(){
@@ -238,6 +271,18 @@
     return data.result;
    }finally{clearTimeout(timer);}
   }
+  s.measureRead=async()=>{
+   const started=performance.now();
+   try{
+    if(!current()||document.hidden)throw Object.assign(Error('stopped'),{code:'STOPPED'});
+    const result=await request({op:'startupCard',requestId:random()});
+    return {ok:true,elapsedMs:Math.round(performance.now()-started),transport:numbers(result&&result.nativeReadP086,
+     ['cloudAuthMs','upstreamMs','cloudTotalMs','gasRequestMs','gasDispatchMs','upstreamPostMs','upstreamRedirectMs'])};
+   }catch(e){
+    if(['AUTH','RECONNECT'].includes(e.code))invalidate();
+    return {ok:false,elapsedMs:Math.round(performance.now()-started),code:['AUTH','RECONNECT','REQUEST','RPC','UNAVAILABLE','RATE_LIMIT','STOPPED'].includes(e.code)?e.code:'UNKNOWN'};
+   }
+  };
   function discardCard(reason,method){
    const p=s.card||s.claimedCard;if(!p)return;
    p.invalidated=true;clearTimeout(p.expiry);s.card=null;s.claimedCard=null;
@@ -326,7 +371,7 @@
   }
   void launch().catch(failBeforeStart);return true;
  }
- window.IecNativeP086=Object.freeze({start,cancel,selected,choose,diagnostics:currentDiagnostics,active:()=>!!(active&&active.attached&&!active.cancelled)});
+ window.IecNativeP086=Object.freeze({start,cancel,selected,choose,diagnostics:currentDiagnostics,measureConcurrentReads,active:()=>!!(active&&active.attached&&!active.cancelled)});
 })();
 
 
@@ -671,7 +716,7 @@
   'use strict';
   const APP='iec-board-badge', PROTOCOL=1;
   const URL_KEY='iec.board.pwa.gasUrl.v1';
-  const VERSION='2026.11.13-D15';
+  const VERSION='2026.11.13-D16';
   const ENTRY=new URL('./',window.location.href);
   const NOTIFY_KEY='iec.board.pwa.notifications:'+ENTRY.pathname;
   const NOTIFY_TAG=APP+':'+ENTRY.pathname+':snapshot';
