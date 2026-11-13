@@ -3,6 +3,15 @@
  'use strict';
  const API='https://asia-northeast1-ishii-board-trial-p003.cloudfunctions.net/businessAppP086';
  const GAS='https://script.google.com/macros/s/AKfycbyDl12j_i0NvCN45tSVgM0ngzAWE73hpuz69Mm9MMRQT_gZkrNJXgJNlGqAee-YG_7c/exec';
+ const CHOICE='iec.entry.native.p086:/iec-board-icon/board-pwa/';
+ function selected(){try{return localStorage.getItem(CHOICE)==='1';}catch(ignore){return false;}}
+ function enabled(){const c=window.IEC_PWA_CONFIG||{};return c.nativeP086===true||(c.nativeP086OptIn===true&&selected());}
+ function choose(value){
+  if(typeof value!=='boolean')throw Error('起動方式を確認してください。');
+  localStorage.setItem(CHOICE,value?'1':'0');
+  if(localStorage.getItem(CHOICE)!==(value?'1':'0'))throw Error('起動方式を保存できませんでした。');
+  return value;
+ }
  let sdkPromise=null,active=null,signInQueue=Promise.resolve();
  const random=()=>Array.from(crypto.getRandomValues(new Uint8Array(16)),v=>v.toString(16).padStart(2,'0')).join('');
  const hash=async text=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text))),v=>v.toString(16).padStart(2,'0')).join('');
@@ -17,7 +26,7 @@
  function cancel(){if(active){active.cancelled=true;clearInterval(active.check);active=null;}window.IecNativeHost=null;}
  function scriptJson(x){return JSON.stringify(x).replace(/[<>&\u2028\u2029]/g,c=>'\\u'+c.charCodeAt(0).toString(16).padStart(4,'0'));}
  function start(o){
-  if(!window.IEC_PWA_CONFIG||window.IEC_PWA_CONFIG.nativeP086!==true||o.url!==GAS)return false;
+  if(!enabled()||o.url!==GAS)return false;
   cancel();const s={cancelled:false,attached:false,check:null,ticketHash:'',key:o.key,originTicket:'',gasCalls:0,checking:false,
    metrics:{version:'P086-OPERATIONS-1',path:'firebase',screenReadyMs:null,latestCardMs:null,talkReadyMs:null,privateHtmlMs:null,bootstrapMs:null}};
   active=s;const current=()=>active===s&&!s.cancelled&&o.current();
@@ -79,5 +88,5 @@
   }
   void launch().catch(failBeforeStart);return true;
  }
- window.IecNativeP086=Object.freeze({start,cancel,active:()=>!!(active&&active.attached&&!active.cancelled)});
+ window.IecNativeP086=Object.freeze({start,cancel,selected,choose,active:()=>!!(active&&active.attached&&!active.cancelled)});
 })();

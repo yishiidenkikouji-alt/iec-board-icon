@@ -8,7 +8,7 @@
   'use strict';
   const ROOT=new URL('./',location.href);
   if(window.top!==window||ROOT.origin!=='https://yishiidenkikouji-alt.github.io'||ROOT.pathname!=='/iec-board-icon/board-pwa/')return;
-  const VERSION='2026.11.12-D11',URL_KEY='iec.board.pwa.gasUrl.v1';
+  const VERSION='2026.11.13-D12',URL_KEY='iec.board.pwa.gasUrl.v1';
   const PREFIX='iec.entry.resume.v1:'+ROOT.pathname+':';
   const TEST_KEY='iec.entry.diagnostic.v1:'+ROOT.pathname;
   const EXPECTED='https://script.google.com/macros/s/AKfycbyDl12j_i0NvCN45tSVgM0ngzAWE73hpuz69Mm9MMRQT_gZkrNJXgJNlGqAee-YG_7c/exec';
@@ -62,7 +62,7 @@
     connection:{saved:'端末の保存設定',backup:'端末の予備保存',common:'会社の共通設定',empty:'接続先なし',error:'予備保存の確認に失敗'}
   };
   const storageState={backup:'checking',protection:'unchecked',connection:'empty'};
-  const floating=document.createElement('button');floating.type='button';floating.id='connectionDiagnosticLauncherD3';floating.textContent='接続診断 D9';floating.setAttribute('aria-haspopup','dialog');
+  const floating=document.createElement('button');floating.type='button';floating.id='connectionDiagnosticLauncherD3';floating.textContent='接続診断 D12';floating.setAttribute('aria-haspopup','dialog');
   floating.style.cssText='position:fixed;right:max(10px,env(safe-area-inset-right,0px));bottom:calc(76px + env(safe-area-inset-bottom,0px));z-index:2000;min-height:44px;padding:9px 12px;border:1px solid #52687c;border-radius:10px;background:#fff;color:#203040;box-shadow:0 2px 8px #0003;font:14px/1.4 system-ui,sans-serif;';
   floating.onclick=open;document.body.appendChild(floating);
   function normalise(value){try{const u=new URL(String(value||'').trim());if(u.protocol!=='https:'||u.hostname!=='script.google.com'||u.port||u.username||u.password||!/^\/(?:a\/[^/]+\/)?macros\/s\/[A-Za-z0-9_-]{20,256}\/exec\/?$/.test(u.pathname))return '';return u.origin+u.pathname.replace(/\/$/,'');}catch(e){return '';}}
@@ -96,14 +96,23 @@
     timingForApp:timingForApp,
     storage:function(kind,code){if(storageLabels[kind]&&Object.prototype.hasOwnProperty.call(storageLabels[kind],code)){storageState[kind]=code;refresh();}},
     session:function(code){if(Object.prototype.hasOwnProperty.call(labels,code)){stage=code;refresh();}},
-    bridge:function(status){if(['waiting','ready','unavailable','reset','no-user'].includes(status)){bridgeStatus=status;floating.hidden=status==='ready';refresh();}},
+    bridge:function(status){if(['waiting','ready','unavailable','reset','no-user'].includes(status)){bridgeStatus=status;floating.hidden=status==='ready'&&!(window.IEC_PWA_CONFIG||{}).nativeP086OptIn;refresh();}},
     connection:function(ok){connectionSave=ok===true?'保存・読み戻し成功':'保存または読み戻しに失敗';refresh();}
   });
   function open(){
     if(!panel){
       panel=document.createElement('dialog');panel.id='connectionDiagnosticD1';panel.setAttribute('aria-label','接続診断');
       panel.style.cssText='box-sizing:border-box;width:calc(100% - 24px);max-width:620px;max-height:90dvh;overflow:auto;border:1px solid #b9c8d5;border-radius:12px;background:#fff;color:#203040;padding:18px;font:15px/1.6 system-ui,sans-serif;';
-      const h=document.createElement('h2');h.textContent='接続診断 D9';h.style.margin='0 0 8px';panel.appendChild(h);
+      const h=document.createElement('h2');h.textContent='接続診断 D12';h.style.margin='0 0 8px';panel.appendChild(h);
+      if((window.IEC_PWA_CONFIG||{}).nativeP086OptIn===true&&window.IecNativeP086){
+        const native=window.IecNativeP086,description=document.createElement('p'),choice=document.createElement('button'),notice=document.createElement('p');
+        description.textContent='起動方式の切り替え：利用を案内された端末で設定してください。設定は次回起動から適用されます。';
+        choice.type='button';choice.id='nativeStartupChoiceP086';choice.style.cssText='padding:10px 12px;min-height:44px;font:inherit;';
+        const label=()=>{choice.textContent=native.selected()?'通常の起動方式に戻す':'新しい起動方式を使う';};
+        label();notice.setAttribute('role','status');
+        choice.onclick=function(){try{const on=native.choose(!native.selected());label();notice.textContent=(on?'新しい起動方式を設定しました。':'通常の起動方式に設定しました。')+'入力中の内容を保存してから、アプリを閉じて、いつものアイコンから開き直してください。';}catch(ignore){notice.textContent='起動方式を保存できませんでした。現在の画面で操作を続けられます。';}};
+        panel.appendChild(description);panel.appendChild(choice);panel.appendChild(notice);
+      }
       const info=document.createElement('p');info.textContent='最初に結果をコピーしてください。保存テストは確認用の日時だけを保存します。テスト後にアプリを閉じて開き直すと、記録が残るか確認できます。登録情報は変更しません。';panel.appendChild(info);
       output=document.createElement('textarea');output.readOnly=true;output.setAttribute('aria-label','共有用の診断結果');output.style.cssText='box-sizing:border-box;width:100%;height:42vh;min-height:180px;font:14px/1.6 system-ui,sans-serif;color:#203040;background:#f4f7fa;';panel.appendChild(output);
       const status=document.createElement('p');status.setAttribute('role','status');panel.appendChild(status);
@@ -134,6 +143,15 @@
  'use strict';
  const API='https://asia-northeast1-ishii-board-trial-p003.cloudfunctions.net/businessAppP086';
  const GAS='https://script.google.com/macros/s/AKfycbyDl12j_i0NvCN45tSVgM0ngzAWE73hpuz69Mm9MMRQT_gZkrNJXgJNlGqAee-YG_7c/exec';
+ const CHOICE='iec.entry.native.p086:/iec-board-icon/board-pwa/';
+ function selected(){try{return localStorage.getItem(CHOICE)==='1';}catch(ignore){return false;}}
+ function enabled(){const c=window.IEC_PWA_CONFIG||{};return c.nativeP086===true||(c.nativeP086OptIn===true&&selected());}
+ function choose(value){
+  if(typeof value!=='boolean')throw Error('起動方式を確認してください。');
+  localStorage.setItem(CHOICE,value?'1':'0');
+  if(localStorage.getItem(CHOICE)!==(value?'1':'0'))throw Error('起動方式を保存できませんでした。');
+  return value;
+ }
  let sdkPromise=null,active=null,signInQueue=Promise.resolve();
  const random=()=>Array.from(crypto.getRandomValues(new Uint8Array(16)),v=>v.toString(16).padStart(2,'0')).join('');
  const hash=async text=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text))),v=>v.toString(16).padStart(2,'0')).join('');
@@ -148,7 +166,7 @@
  function cancel(){if(active){active.cancelled=true;clearInterval(active.check);active=null;}window.IecNativeHost=null;}
  function scriptJson(x){return JSON.stringify(x).replace(/[<>&\u2028\u2029]/g,c=>'\\u'+c.charCodeAt(0).toString(16).padStart(4,'0'));}
  function start(o){
-  if(!window.IEC_PWA_CONFIG||window.IEC_PWA_CONFIG.nativeP086!==true||o.url!==GAS)return false;
+  if(!enabled()||o.url!==GAS)return false;
   cancel();const s={cancelled:false,attached:false,check:null,ticketHash:'',key:o.key,originTicket:'',gasCalls:0,checking:false,
    metrics:{version:'P086-OPERATIONS-1',path:'firebase',screenReadyMs:null,latestCardMs:null,talkReadyMs:null,privateHtmlMs:null,bootstrapMs:null}};
   active=s;const current=()=>active===s&&!s.cancelled&&o.current();
@@ -210,7 +228,7 @@
   }
   void launch().catch(failBeforeStart);return true;
  }
- window.IecNativeP086=Object.freeze({start,cancel,active:()=>!!(active&&active.attached&&!active.cancelled)});
+ window.IecNativeP086=Object.freeze({start,cancel,selected,choose,active:()=>!!(active&&active.attached&&!active.cancelled)});
 })();
 
 
@@ -360,7 +378,7 @@
  */
 (function(){
   'use strict';
-  const APP='iec-device-resume-v1', VERSION='2026.11.12-D11';
+  const APP='iec-device-resume-v1', VERSION='2026.11.13-D12';
   const ROOT=new URL('./',location.href), frame=document.getElementById('boardFrame');
   if(!frame||window.top!==window||location.origin!=='https://yishiidenkikouji-alt.github.io'||ROOT.pathname!=='/iec-board-icon/board-pwa/')return;
   const state={nonce:'',page:'',source:null,origin:'',key:'',lastSeq:0,generation:0};
@@ -392,7 +410,7 @@
     launch('frame-start');
     // A short-lived channel nonce, NOT an identity or a login credential.
     url.searchParams.set('iec_resume_nonce',state.nonce);
-    setStatus('端末保持 D10：GASとの連携を確認中…');return url.href;
+    setStatus('端末保持 D12：GASとの連携を確認中…');return url.href;
   }
   // P082 capability is learned only from the configured iframe's nonce-bound hello.
   // It is a transport hint, never an identity or authorization decision.
@@ -510,8 +528,8 @@
       const c=context();
       enqueue(async function(){
         if(!c.current())return;
-        try{const saved=await storage().readTicket(c.key,c.current);if(!c.current())return;diagnostic(saved.ticket?'sent':'empty');launch('ticket-ready');let startupTimingD5=null;try{const diag=window.IecConnectionDiagnosticsD1;if(diag&&diag.timingForApp)startupTimingD5=diag.timingForApp();}catch(ignore){}reply(c,'ready',{revision:saved.revision,ticket:saved.ticket,version:VERSION,startupTimingD5:startupTimingD5,postP082:proofP082()});setStatus(saved.ticket?'端末保持 D10：保存した利用者をGASで検証中…':'端末保持 D10：未保存（GASで本人を登録後に保存します）');}
-        catch(e){if(!c.current())return;diagnostic('readError');reply(c,'ready',{revision:'',ticket:'',version:VERSION,error:'端末内の保存情報を読み取れません。情報は消していません。アプリを開き直してください。'});setStatus('端末保持 D10：保存情報を読み取れません（未登録には戻していません）');}
+        try{const saved=await storage().readTicket(c.key,c.current);if(!c.current())return;diagnostic(saved.ticket?'sent':'empty');launch('ticket-ready');let startupTimingD5=null;try{const diag=window.IecConnectionDiagnosticsD1;if(diag&&diag.timingForApp)startupTimingD5=diag.timingForApp();}catch(ignore){}reply(c,'ready',{revision:saved.revision,ticket:saved.ticket,version:VERSION,startupTimingD5:startupTimingD5,postP082:proofP082()});setStatus(saved.ticket?'端末保持 D12：保存した利用者をGASで検証中…':'端末保持 D12：未保存（GASで本人を登録後に保存します）');}
+        catch(e){if(!c.current())return;diagnostic('readError');reply(c,'ready',{revision:'',ticket:'',version:VERSION,error:'端末内の保存情報を読み取れません。情報は消していません。アプリを開き直してください。'});setStatus('端末保持 D12：保存情報を読み取れません（未登録には戻していません）');}
       });
       return;
     }
@@ -529,7 +547,7 @@
         const saved=await storage().writeTicket(c.key,request.expectedRevision,request.type==='save'?request.ticket:'',c.current);
         if(!c.current())return;
         ack.revision=saved.revision;ack.ok=true;
-        setStatus(request.type==='save'?'端末保持 D10：この端末に保存確認済み':'端末保持 D10：登録解除済み');
+        setStatus(request.type==='save'?'端末保持 D12：この端末に保存確認済み':'端末保持 D12：登録解除済み');
       }catch(e){ack.reason=e.code==='conflict'?'conflict':'storage';ack.error=String(e&&e.message||'端末への保存に失敗しました。');}
       if(!c.current())return;
       diagnostic(ack.ok?(request.type==='save'?'saved':'removed'):(ack.reason==='conflict'?'conflict':'writeError'));
@@ -538,7 +556,7 @@
   });
   // Tickets are sent only to the configured GAS origin in POST bodies or the nonce-bound bridge; never URLs, logs or analytics.
   const el=document.getElementById('entrySessionVersion');if(el)el.textContent=VERSION;
-  setStatus('端末保持 D10：接続先の設定を待っています');
+  setStatus('端末保持 D12：接続先の設定を待っています');
 })();
 
 
@@ -553,7 +571,7 @@
   'use strict';
   const APP='iec-board-badge', PROTOCOL=1;
   const URL_KEY='iec.board.pwa.gasUrl.v1';
-  const VERSION='2026.11.12-D11';
+  const VERSION='2026.11.13-D12';
   const ENTRY=new URL('./',window.location.href);
   const NOTIFY_KEY='iec.board.pwa.notifications:'+ENTRY.pathname;
   const NOTIFY_TAG=APP+':'+ENTRY.pathname+':snapshot';
