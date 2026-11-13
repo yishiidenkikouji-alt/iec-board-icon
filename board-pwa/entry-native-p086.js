@@ -3,6 +3,10 @@
  'use strict';
  const API='https://asia-northeast1-ishii-board-trial-p003.cloudfunctions.net/businessAppP086';
  const LOAD_API=API+'?p086_load_check=1';
+ const TRANSPORT_TIMINGS=["cloudAuthMs","cloudTokenMs","cloudGrantMs","cloudGateMs","cloudReserveMs","cloudRecheckMs","upstreamMs","cloudTotalMs","gasRequestMs","gasDispatchMs","upstreamPostMs","upstreamRedirectMs","gasParseMs","gasSecretMs","gasVerifyMs","gasConfigMs","gasLockWaitMs","gasNonceMs","gasLockReleaseMs","gasPayloadMs","gasBeforeDispatchMs","resumeMs","gateMs","rpcMs"];
+ const RESOURCE_COLUMNS=["timingAvailable","protocol","durationMs","startOffsetMs","preRequestMs","dnsMs","connectMs","tlsMs","waitResponseMs","receiveMs"];
+ function table(columns,rows,value){return {columns,rows:rows.map(row=>columns.map(key=>value(row,key)))};}
+ function sampleTable(rows){const columns=['ok','elapsedMs','code',...CLIENT_TIMINGS.map(k=>'client.'+k),...TRANSPORT_TIMINGS.map(k=>'transport.'+k)];return table(columns,rows,(r,k)=>{if(k==='ok')return r.ok===true;if(k==='code')return r.code||null;if(k==='elapsedMs')return number(r[k]);const [group,key]=k.split('.');return number(r[group]&&r[group][key]);});}
  const CLIENT_TIMINGS=['sdkMs','storageMs','tokenMs','beforeFetchMs','headersMs','bodyMs','totalMs','handlerMs','encodeMs'];
  const GAS='https://script.google.com/macros/s/AKfycbyDl12j_i0NvCN45tSVgM0ngzAWE73hpuz69Mm9MMRQT_gZkrNJXgJNlGqAee-YG_7c/exec';
  const CHOICE='iec.entry.native.p086:/iec-board-icon/board-pwa/';
@@ -44,13 +48,13 @@
   try{
    const at=new Date().toISOString(),baselineStarted=performance.now(),baseline=await s.measureRead();
    baseline.browserResources=browserResources(baselineStarted,performance.now());
-   if(!baseline.ok)return {version:'P086-CONCURRENT-READ-2',at,background:loadCheckBackground,scope:'same-session-own-card-read',requestedConcurrency:15,baseline,concurrent:null};
+   if(!baseline.ok)return {version:'P086-CONCURRENT-READ-3',at,background:loadCheckBackground,scope:'same-session-own-card-read',requestedConcurrency:15,baseline,concurrent:null};
    const started=performance.now(),samples=await Promise.all(Array.from({length:15},()=>s.measureRead()));
    const successful=samples.filter(x=>x.ok).map(x=>x.elapsedMs).sort((a,b)=>a-b),percentile=p=>successful.length?successful[Math.ceil(successful.length*p)-1]:null;
-   return {version:'P086-CONCURRENT-READ-2',at,background:loadCheckBackground,scope:'same-session-own-card-read',requestedConcurrency:15,baseline,
+   return {version:'P086-CONCURRENT-READ-3',at,background:loadCheckBackground,scope:'same-session-own-card-read',requestedConcurrency:15,baseline,
     concurrent:{requests:15,successful:successful.length,failed:15-successful.length,batchMs:Math.round(performance.now()-started),
      minMs:successful.length?successful[0]:null,medianMs:percentile(.5),p95Ms:percentile(.95),maxMs:successful.length?successful.at(-1):null,
-     browserResources:browserResources(started,performance.now()),samples}};
+     browserResources:table(RESOURCE_COLUMNS,browserResources(started,performance.now()),(r,k)=>r[k]),resourceRowsNotCorrelated:true,samples:sampleTable(samples)}};
   }finally{loadCheckRunning=false;}
  }
  document.addEventListener('visibilitychange',()=>{if(document.hidden&&loadCheckRunning)loadCheckBackground=true;if(document.hidden&&active&&(active.metrics.latestCardMs===null||active.metrics.talkReadyMs===null))active.background=true;});
@@ -62,11 +66,11 @@
   try{const w=s.frame.contentWindow;extra=typeof w.IecNativeReportP086==='function'?(w.IecNativeReportP086()||{}):{};talk=w.IecTalkP012?(w.IecTalkP012.diagnostics()||{}):{};}catch(ignore){}
   const report={version:'P086-ENTRY-DIAG-1',at:s.at,background:s.background,operationReadyP086:{
    version:'P086-OPERATIONS-1',path:'firebase',...numbers(s.metrics,['screenReadyMs','latestCardMs','talkReadyMs','privateHtmlMs','bootstrapMs']),gasCalls:number(s.gasCalls),
-    revision:['P086-FIX-1','P086-FIX-2','P086-FIX-3','P086-FIX-4'].includes(extra.revision)?extra.revision:'unconfirmed',
+    revision:['P086-FIX-1','P086-FIX-2','P086-FIX-3','P086-FIX-4','P086-FIX-5'].includes(extra.revision)?extra.revision:'unconfirmed',
    rpcErrors:(Array.isArray(extra.rpcErrors)?extra.rpcErrors:[]).filter(e=>e&&typeof e==='object').slice(-8).map(e=>({
     method:typeof e.method==='string'&&/^[A-Za-z][A-Za-z0-9_]{0,89}$/.test(e.method)?e.method:'unknown',
     code:['AUTH','RECONNECT','REQUEST','NORMAL_ENTRY_REQUIRED','DUPLICATE','RPC','UNAVAILABLE','RATE_LIMIT','UNKNOWN'].includes(e.code)?e.code:'UNKNOWN'
-    })),cardTransport:extra.cardTransport?{version:['P086-READ-2','P086-READ-3','P086-READ-4'].includes(extra.cardTransport.version)?extra.cardTransport.version:'unconfirmed',dailyOptionsDeferred:extra.cardTransport.dailyOptionsDeferred===true,...numbers(extra.cardTransport,['resumeMs','gateMs','rpcMs','gasDispatchMs','bulkReads','propertyReadsAvoided','bulkMs','cloudAuthMs','cloudTokenMs','cloudGrantMs','cloudGateMs','cloudReserveMs','cloudRecheckMs','upstreamMs','cloudTotalMs','upstreamPostMs','upstreamRedirectMs','upstreamBodyMs','upstreamDecodeMs','upstreamRedirects','gasBeforeDispatchMs','gasRequestMs']),client:numbers(extra.cardTransport.client,CLIENT_TIMINGS)}:null,
+    })),cardTransport:extra.cardTransport?{version:['P086-READ-2','P086-READ-3','P086-READ-4'].includes(extra.cardTransport.version)?extra.cardTransport.version:'unconfirmed',dailyOptionsDeferred:extra.cardTransport.dailyOptionsDeferred===true,...numbers(extra.cardTransport,['resumeMs','gateMs','rpcMs','gasDispatchMs','bulkReads','propertyReadsAvoided','bulkMs','cloudAuthMs','cloudTokenMs','cloudGrantMs','cloudGateMs','cloudReserveMs','cloudRecheckMs','upstreamMs','cloudTotalMs','upstreamPostMs','upstreamRedirectMs','upstreamBodyMs','upstreamDecodeMs','upstreamRedirects','gasParseMs','gasSecretMs','gasVerifyMs','gasConfigMs','gasLockWaitMs','gasNonceMs','gasLockReleaseMs','gasPayloadMs','gasBeforeDispatchMs','gasRequestMs']),client:numbers(extra.cardTransport.client,CLIENT_TIMINGS)}:null,
     cardRequestP086:{version:'P086-CARD-2',state:s.cardMetrics.state,discardReason:s.cardMetrics.discardReason||null,discardMethod:s.cardMetrics.discardMethod||null,...numbers(s.cardMetrics,['startedMs','requestedMs','receivedMs','leadMs','discardedMs'])}},
    talk:{connected:talk.connected===true,directActive:!!(talk.direct&&talk.direct.active),
     connection:numbers(talk.connection,['sdkMs','issueMs','signInMs','claimsMs','firstSnapshotMs','totalMs']),
@@ -129,7 +133,7 @@
     if(!current()||document.hidden)throw Object.assign(Error('stopped'),{code:'STOPPED'});
     const result=await request({op:'startupCard',requestId:random()},true,{probe:true,metrics:client});
     return {ok:true,elapsedMs:Math.round(performance.now()-started),client:numbers(client,CLIENT_TIMINGS),transport:numbers(result&&result.nativeReadP086,
-     ['cloudAuthMs','cloudTokenMs','cloudGrantMs','cloudGateMs','cloudReserveMs','cloudRecheckMs','upstreamMs','cloudTotalMs','gasRequestMs','gasDispatchMs','upstreamPostMs','upstreamRedirectMs'])};
+     TRANSPORT_TIMINGS)};
    }catch(e){
     if(['AUTH','RECONNECT'].includes(e.code))invalidate();
     return {ok:false,elapsedMs:Math.round(performance.now()-started),client:numbers(client,CLIENT_TIMINGS),code:['AUTH','RECONNECT','REQUEST','RPC','UNAVAILABLE','RATE_LIMIT','STOPPED'].includes(e.code)?e.code:'UNKNOWN'};

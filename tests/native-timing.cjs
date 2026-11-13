@@ -13,10 +13,15 @@ test('client stages and server durations are bounded; resource timing exports no
    entries.push({name:'https://example.com/SECRET',initiatorType:'fetch',startTime:start});return r;
   };
   const report=await h.w.IecNativeP086.measureConcurrentReads();
-  assert.equal(report.version,'P086-CONCURRENT-READ-2');assert.equal(report.baseline.client.handlerMs,24);assert.equal(report.baseline.client.encodeMs,2);
-  assert.equal(report.concurrent.browserResources.length,15);assert.equal(report.baseline.browserResources.length,1);
-  assert(report.concurrent.browserResources.every(x=>x.protocol==='h2'&&x.preRequestMs===10&&x.waitResponseMs===30));
+  assert.equal(report.version,'P086-CONCURRENT-READ-3');assert.equal(report.baseline.client.handlerMs,24);assert.equal(report.baseline.client.encodeMs,2);
+  assert.equal(report.concurrent.browserResources.rows.length,15);assert.equal(report.baseline.browserResources.length,1);
+  assert(report.concurrent.browserResources.rows.map(row=>Object.fromEntries(report.concurrent.browserResources.columns.map((k,i)=>[k,row[i]]))).every(x=>x.protocol==='h2'&&x.preRequestMs===10&&x.waitResponseMs===30));
   assert.doesNotMatch(JSON.stringify(report),/SECRET|PRIVATE|https:|ID_TOKEN|current-place/);
+  assert.equal(report.concurrent.samples.rows.length,15);assert.equal(report.concurrent.resourceRowsNotCorrelated,true);
+  const columns=report.concurrent.samples.columns;assert(columns.includes('transport.gasLockWaitMs'));
+  assert(report.concurrent.samples.rows.every(row=>row.length===columns.length&&row[columns.indexOf('transport.gasLockWaitMs')]===null));
+  const worst=JSON.parse(JSON.stringify(report));worst.concurrent.samples.rows=worst.concurrent.samples.rows.map(row=>row.map((v,i)=>i<3?v:75000));
+  assert(Buffer.byteLength(JSON.stringify(worst))<10000,'full 15-request export must fit the observed clipboard limit');
  }finally{h.close();}
 });
 test('a browser without timing permission is reported as unavailable rather than zero waiting',async()=>{
@@ -25,6 +30,6 @@ test('a browser without timing permission is reported as unavailable rather than
   h.w.performance.getEntriesByType=()=>entries;
   h.w.fetch=async(url,options)=>{entries.push({name:url,initiatorType:'fetch',startTime:h.w.performance.now(),duration:100,requestStart:0,responseStart:0,responseEnd:0,nextHopProtocol:'PRIVATE_PROTOCOL'});return base(url,options);};
   const report=await h.w.IecNativeP086.measureConcurrentReads();
-  assert.equal(report.baseline.client.handlerMs,null);assert(report.concurrent.browserResources.every(x=>!x.timingAvailable&&x.preRequestMs===null&&x.protocol==='unknown'));
+  assert.equal(report.baseline.client.handlerMs,null);assert(report.concurrent.browserResources.rows.map(row=>Object.fromEntries(report.concurrent.browserResources.columns.map((k,i)=>[k,row[i]]))).every(x=>!x.timingAvailable&&x.preRequestMs===null&&x.protocol==='unknown'));
  }finally{h.close();}
 });
