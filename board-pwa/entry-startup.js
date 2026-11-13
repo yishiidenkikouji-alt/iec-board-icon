@@ -8,7 +8,7 @@
   'use strict';
   const ROOT=new URL('./',location.href);
   if(window.top!==window||ROOT.origin!=='https://yishiidenkikouji-alt.github.io'||ROOT.pathname!=='/iec-board-icon/board-pwa/')return;
-  const VERSION='2026.11.13-D16',URL_KEY='iec.board.pwa.gasUrl.v1';
+  const VERSION='2026.11.13-D17',URL_KEY='iec.board.pwa.gasUrl.v1';
   const PREFIX='iec.entry.resume.v1:'+ROOT.pathname+':';
   const TEST_KEY='iec.entry.diagnostic.v1:'+ROOT.pathname;
   const EXPECTED='https://script.google.com/macros/s/AKfycbyDl12j_i0NvCN45tSVgM0ngzAWE73hpuz69Mm9MMRQT_gZkrNJXgJNlGqAee-YG_7c/exec';
@@ -62,12 +62,12 @@
     connection:{saved:'端末の保存設定',backup:'端末の予備保存',common:'会社の共通設定',empty:'接続先なし',error:'予備保存の確認に失敗'}
   };
   const storageState={backup:'checking',protection:'unchecked',connection:'empty'};
-  const floating=document.createElement('button');floating.type='button';floating.id='connectionDiagnosticLauncherD3';floating.textContent='接続診断 D16';floating.setAttribute('aria-haspopup','dialog');
+  const floating=document.createElement('button');floating.type='button';floating.id='connectionDiagnosticLauncherD3';floating.textContent='接続診断 D17';floating.setAttribute('aria-haspopup','dialog');
   // Reserve space outside the application frame. A fixed bottom launcher covered
   // the talk submit button, especially when its composer wrapped on a phone.
   floating.style.cssText='min-height:44px;padding:9px 12px;border:1px solid #52687c;border-radius:10px;background:#fff;color:#203040;font:14px/1.4 system-ui,sans-serif;';
   const launcherDock=document.createElement('div'),entryBar=document.getElementById('entryBar');
-  launcherDock.id='connectionDiagnosticDockD16';
+  launcherDock.id='connectionDiagnosticDockD17';
   launcherDock.style.cssText='order:-1;flex:0 0 auto;display:flex;justify-content:flex-end;padding:2px max(8px,env(safe-area-inset-right,0px)) 2px max(8px,env(safe-area-inset-left,0px));background:#eceff1;';
   floating.onclick=open;launcherDock.appendChild(floating);document.body.appendChild(launcherDock);
   function launcherVisibility(){launcherDock.hidden=!!(entryBar&&!entryBar.hidden)||(bridgeStatus==='ready'&&!(window.IEC_PWA_CONFIG||{}).nativeP086OptIn);}
@@ -111,7 +111,7 @@
     if(!panel){
       panel=document.createElement('dialog');panel.id='connectionDiagnosticD1';panel.setAttribute('aria-label','接続診断');
       panel.style.cssText='box-sizing:border-box;width:calc(100% - 24px);max-width:620px;max-height:90dvh;overflow:auto;border:1px solid #b9c8d5;border-radius:12px;background:#fff;color:#203040;padding:18px;font:15px/1.6 system-ui,sans-serif;';
-      const h=document.createElement('h2');h.textContent='接続診断 D16';h.style.margin='0 0 8px';panel.appendChild(h);
+      const h=document.createElement('h2');h.textContent='接続診断 D17';h.style.margin='0 0 8px';panel.appendChild(h);
       if(window.IecNativeP086&&typeof window.IecNativeP086.diagnostics==='function'){
         const copy=document.createElement('button');copy.type='button';copy.textContent='今回の起動診断をコピー';copy.style.cssText='padding:10px 12px;min-height:44px;font:inherit;';
         copy.onclick=async function(){
@@ -178,6 +178,8 @@
 (function(){
  'use strict';
  const API='https://asia-northeast1-ishii-board-trial-p003.cloudfunctions.net/businessAppP086';
+ const LOAD_API=API+'?p086_load_check=1';
+ const CLIENT_TIMINGS=['sdkMs','storageMs','tokenMs','beforeFetchMs','headersMs','bodyMs','totalMs','handlerMs','encodeMs'];
  const GAS='https://script.google.com/macros/s/AKfycbyDl12j_i0NvCN45tSVgM0ngzAWE73hpuz69Mm9MMRQT_gZkrNJXgJNlGqAee-YG_7c/exec';
  const CHOICE='iec.entry.native.p086:/iec-board-icon/board-pwa/';
  const CARD_CAP='iec.entry.card.p086:/iec-board-icon/board-pwa/';
@@ -197,6 +199,17 @@
   return value;
  }
  let sdkPromise=null,active=null,signInQueue=Promise.resolve(),loadCheckRunning=false,lastLoadCheckAt=0,loadCheckBackground=false;
+ function browserResources(since,until){
+  try{return performance.getEntriesByType('resource').filter(e=>e.name===LOAD_API&&e.initiatorType==='fetch'&&e.startTime>=since&&e.startTime<=until).slice(-16).map(e=>{
+   const visible=e.requestStart>0&&e.responseStart>=e.requestStart&&e.responseEnd>=e.responseStart;
+   const difference=(end,start)=>number(end-start);
+   return {timingAvailable:visible,protocol:['h2','h3','http/1.1'].includes(e.nextHopProtocol)?e.nextHopProtocol:'unknown',
+    durationMs:number(e.duration),startOffsetMs:difference(e.startTime,since),
+    preRequestMs:visible?difference(e.requestStart,e.fetchStart):null,dnsMs:visible?difference(e.domainLookupEnd,e.domainLookupStart):null,
+    connectMs:visible?difference(e.connectEnd,e.connectStart):null,tlsMs:visible&&e.secureConnectionStart>0?difference(e.connectEnd,e.secureConnectionStart):null,
+    waitResponseMs:visible?difference(e.responseStart,e.requestStart):null,receiveMs:visible?difference(e.responseEnd,e.responseStart):null};
+  });}catch(ignore){return [];}
+ }
  // A manually invoked, bounded own-card read. It is not a 15-device startup test.
  async function measureConcurrentReads(){
   const s=active;
@@ -205,13 +218,15 @@
   if(!s||!s.current()||!s.attached||!s.measureRead||s.metrics.latestCardMs===null||document.hidden)throw Error('最新カードが表示されてから実行してください。');
   loadCheckRunning=true;lastLoadCheckAt=Date.now();loadCheckBackground=false;
   try{
-   const at=new Date().toISOString(),baseline=await s.measureRead();
-   if(!baseline.ok)return {version:'P086-CONCURRENT-READ-1',at,background:loadCheckBackground,scope:'same-session-own-card-read',requestedConcurrency:15,baseline,concurrent:null};
+   const at=new Date().toISOString(),baselineStarted=performance.now(),baseline=await s.measureRead();
+   baseline.browserResources=browserResources(baselineStarted,performance.now());
+   if(!baseline.ok)return {version:'P086-CONCURRENT-READ-2',at,background:loadCheckBackground,scope:'same-session-own-card-read',requestedConcurrency:15,baseline,concurrent:null};
    const started=performance.now(),samples=await Promise.all(Array.from({length:15},()=>s.measureRead()));
    const successful=samples.filter(x=>x.ok).map(x=>x.elapsedMs).sort((a,b)=>a-b),percentile=p=>successful.length?successful[Math.ceil(successful.length*p)-1]:null;
-   return {version:'P086-CONCURRENT-READ-1',at,background:loadCheckBackground,scope:'same-session-own-card-read',requestedConcurrency:15,baseline,
+   return {version:'P086-CONCURRENT-READ-2',at,background:loadCheckBackground,scope:'same-session-own-card-read',requestedConcurrency:15,baseline,
     concurrent:{requests:15,successful:successful.length,failed:15-successful.length,batchMs:Math.round(performance.now()-started),
-     minMs:successful.length?successful[0]:null,medianMs:percentile(.5),p95Ms:percentile(.95),maxMs:successful.length?successful.at(-1):null,samples}};
+     minMs:successful.length?successful[0]:null,medianMs:percentile(.5),p95Ms:percentile(.95),maxMs:successful.length?successful.at(-1):null,
+     browserResources:browserResources(started,performance.now()),samples}};
   }finally{loadCheckRunning=false;}
  }
  document.addEventListener('visibilitychange',()=>{if(document.hidden&&loadCheckRunning)loadCheckBackground=true;if(document.hidden&&active&&(active.metrics.latestCardMs===null||active.metrics.talkReadyMs===null))active.background=true;});
@@ -223,11 +238,11 @@
   try{const w=s.frame.contentWindow;extra=typeof w.IecNativeReportP086==='function'?(w.IecNativeReportP086()||{}):{};talk=w.IecTalkP012?(w.IecTalkP012.diagnostics()||{}):{};}catch(ignore){}
   const report={version:'P086-ENTRY-DIAG-1',at:s.at,background:s.background,operationReadyP086:{
    version:'P086-OPERATIONS-1',path:'firebase',...numbers(s.metrics,['screenReadyMs','latestCardMs','talkReadyMs','privateHtmlMs','bootstrapMs']),gasCalls:number(s.gasCalls),
-    revision:['P086-FIX-1','P086-FIX-2','P086-FIX-3'].includes(extra.revision)?extra.revision:'unconfirmed',
+    revision:['P086-FIX-1','P086-FIX-2','P086-FIX-3','P086-FIX-4'].includes(extra.revision)?extra.revision:'unconfirmed',
    rpcErrors:(Array.isArray(extra.rpcErrors)?extra.rpcErrors:[]).filter(e=>e&&typeof e==='object').slice(-8).map(e=>({
     method:typeof e.method==='string'&&/^[A-Za-z][A-Za-z0-9_]{0,89}$/.test(e.method)?e.method:'unknown',
     code:['AUTH','RECONNECT','REQUEST','NORMAL_ENTRY_REQUIRED','DUPLICATE','RPC','UNAVAILABLE','RATE_LIMIT','UNKNOWN'].includes(e.code)?e.code:'UNKNOWN'
-    })),cardTransport:extra.cardTransport?{version:['P086-READ-2','P086-READ-3','P086-READ-4'].includes(extra.cardTransport.version)?extra.cardTransport.version:'unconfirmed',dailyOptionsDeferred:extra.cardTransport.dailyOptionsDeferred===true,...numbers(extra.cardTransport,['resumeMs','gateMs','rpcMs','gasDispatchMs','bulkReads','propertyReadsAvoided','bulkMs','cloudAuthMs','upstreamMs','cloudTotalMs','upstreamPostMs','upstreamRedirectMs','upstreamBodyMs','upstreamDecodeMs','upstreamRedirects','gasBeforeDispatchMs','gasRequestMs'])}:null,
+    })),cardTransport:extra.cardTransport?{version:['P086-READ-2','P086-READ-3','P086-READ-4'].includes(extra.cardTransport.version)?extra.cardTransport.version:'unconfirmed',dailyOptionsDeferred:extra.cardTransport.dailyOptionsDeferred===true,...numbers(extra.cardTransport,['resumeMs','gateMs','rpcMs','gasDispatchMs','bulkReads','propertyReadsAvoided','bulkMs','cloudAuthMs','cloudTokenMs','cloudGrantMs','cloudGateMs','cloudReserveMs','cloudRecheckMs','upstreamMs','cloudTotalMs','upstreamPostMs','upstreamRedirectMs','upstreamBodyMs','upstreamDecodeMs','upstreamRedirects','gasBeforeDispatchMs','gasRequestMs']),client:numbers(extra.cardTransport.client,CLIENT_TIMINGS)}:null,
     cardRequestP086:{version:'P086-CARD-2',state:s.cardMetrics.state,discardReason:s.cardMetrics.discardReason||null,discardMethod:s.cardMetrics.discardMethod||null,...numbers(s.cardMetrics,['startedMs','requestedMs','receivedMs','leadMs','discardedMs'])}},
    talk:{connected:talk.connected===true,directActive:!!(talk.direct&&talk.direct.active),
     connection:numbers(talk.connection,['sdkMs','issueMs','signInMs','claimsMs','firstSnapshotMs','totalMs']),
@@ -258,29 +273,42 @@
    const saved=await window.IecDeviceStorageD3.readTicket(o.key,current);
    if(!current()||saved.ticket!==s.originTicket)throw Object.assign(Error('保存した利用者が変わりました。'),{code:'RECONNECT'});
   }
-  async function request(body,authenticated=true){
-   const {auth}=await sdk();if(!current())throw Error('navigation');
-   if(authenticated)await unchanged();
+  async function request(body,authenticated=true,diagnostic){
+   const begun=performance.now(),timing=diagnostic&&diagnostic.metrics||{};
+   const {auth}=await sdk();timing.sdkMs=Math.round(performance.now()-begun);if(!current())throw Error('navigation');
+   let mark=performance.now();if(authenticated)await unchanged();timing.storageMs=Math.round(performance.now()-mark);
    const headers={'Content-Type':'application/json'};
+   mark=performance.now();
    if(authenticated){if(!auth.currentUser)throw Object.assign(Error('本人確認が必要です。'),{code:'AUTH'});headers.Authorization='Bearer '+await auth.currentUser.getIdToken();headers['X-IEC-Ticket-Hash']=s.ticketHash;}
+   timing.tokenMs=Math.round(performance.now()-mark);
    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),75000);
    try{
-    const response=await fetch(API,{method:'POST',headers,body:JSON.stringify(body),cache:'no-store',credentials:'omit',signal:controller.signal});
-    const data=await response.json();if(!current())throw Error('navigation');
+    const fetchStarted=performance.now();timing.beforeFetchMs=Math.round(fetchStarted-begun);
+    const response=await fetch(diagnostic&&diagnostic.probe?LOAD_API:API,{method:'POST',headers,body:JSON.stringify(body),cache:'no-store',credentials:'omit',signal:controller.signal});
+    const headersAt=performance.now();timing.headersMs=Math.round(headersAt-fetchStarted);
+    const data=await response.json();timing.bodyMs=Math.round(performance.now()-headersAt);timing.totalMs=Math.round(performance.now()-begun);
+    try{const value=response.headers.get('Server-Timing')||'';for(const [key,name] of [['handlerMs','app'],['encodeMs','encode']]){
+     const found=value.match(new RegExp('(?:^|,\\s*)'+name+';dur=([0-9.]+)(?:,|$)'));timing[key]=found?number(Number(found[1])):null;
+    }}catch(ignore){}
+    if(!current())throw Error('navigation');
     if(!response.ok||data.ok!==true)throw Object.assign(Error(data.message||'応答を確認できません。'),{code:data.code||'UNAVAILABLE'});
+    if(body.op==='startupCard'&&data.result&&typeof data.result==='object'){
+     if(!data.result.nativeReadP086)data.result.nativeReadP086={};
+     data.result.nativeReadP086.client=numbers(timing,CLIENT_TIMINGS);
+    }
     return data.result;
-   }finally{clearTimeout(timer);}
+   }finally{timing.totalMs=Math.round(performance.now()-begun);clearTimeout(timer);}
   }
   s.measureRead=async()=>{
-   const started=performance.now();
+   const started=performance.now(),client={};
    try{
     if(!current()||document.hidden)throw Object.assign(Error('stopped'),{code:'STOPPED'});
-    const result=await request({op:'startupCard',requestId:random()});
-    return {ok:true,elapsedMs:Math.round(performance.now()-started),transport:numbers(result&&result.nativeReadP086,
-     ['cloudAuthMs','upstreamMs','cloudTotalMs','gasRequestMs','gasDispatchMs','upstreamPostMs','upstreamRedirectMs'])};
+    const result=await request({op:'startupCard',requestId:random()},true,{probe:true,metrics:client});
+    return {ok:true,elapsedMs:Math.round(performance.now()-started),client:numbers(client,CLIENT_TIMINGS),transport:numbers(result&&result.nativeReadP086,
+     ['cloudAuthMs','cloudTokenMs','cloudGrantMs','cloudGateMs','cloudReserveMs','cloudRecheckMs','upstreamMs','cloudTotalMs','gasRequestMs','gasDispatchMs','upstreamPostMs','upstreamRedirectMs'])};
    }catch(e){
     if(['AUTH','RECONNECT'].includes(e.code))invalidate();
-    return {ok:false,elapsedMs:Math.round(performance.now()-started),code:['AUTH','RECONNECT','REQUEST','RPC','UNAVAILABLE','RATE_LIMIT','STOPPED'].includes(e.code)?e.code:'UNKNOWN'};
+    return {ok:false,elapsedMs:Math.round(performance.now()-started),client:numbers(client,CLIENT_TIMINGS),code:['AUTH','RECONNECT','REQUEST','RPC','UNAVAILABLE','RATE_LIMIT','STOPPED'].includes(e.code)?e.code:'UNKNOWN'};
    }
   };
   function discardCard(reason,method){
@@ -716,7 +744,7 @@
   'use strict';
   const APP='iec-board-badge', PROTOCOL=1;
   const URL_KEY='iec.board.pwa.gasUrl.v1';
-  const VERSION='2026.11.13-D16';
+  const VERSION='2026.11.13-D17';
   const ENTRY=new URL('./',window.location.href);
   const NOTIFY_KEY='iec.board.pwa.notifications:'+ENTRY.pathname;
   const NOTIFY_TAG=APP+':'+ENTRY.pathname+':snapshot';
