@@ -1,27 +1,5 @@
-const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),crypto=require('node:crypto');
-const {JSDOM}=require('jsdom');
-const source=fs.readFileSync(require('node:path').join(__dirname,'../board-pwa/entry-native-p086.js'),'utf8').replaceAll("import('https://", "loadSDK('https://");
-const GAS='https://script.google.com/macros/s/AKfycbyDl12j_i0NvCN45tSVgM0ngzAWE73hpuz69Mm9MMRQT_gZkrNJXgJNlGqAee-YG_7c/exec';
-const settle=async()=>{for(let i=0;i<15;i++)await new Promise(r=>setImmediate(r));};
-function fixture(){
- const dom=new JSDOM('<!doctype html><iframe id="boardFrame"></iframe>',{url:'https://yishiidenkikouji-alt.github.io/iec-board-icon/board-pwa/',runScripts:'outside-only',pretendToBeVisual:true});
- const w=dom.window,frame=w.document.querySelector('iframe'),calls=[];let ticket='signed-ticket',fallback=0,signins=0,signouts=0,failure='',delay=null;
- Object.defineProperty(w,'crypto',{value:crypto.webcrypto});Object.assign(w,{TextEncoder,AbortController,structuredClone});
- w.IEC_PWA_CONFIG={nativeP086:true};w.IecDeviceStorageD3={readTicket:async()=>({ticket})};
- const auth={currentUser:{getIdToken:async()=> 'ID_TOKEN'},authStateReady:async()=>{}};
- const lib={initializeAuth:()=>auth,indexedDBLocalPersistence:{},browserLocalPersistence:{},browserSessionPersistence:{},signInWithCustomToken:async()=>{signins++;auth.currentUser={getIdToken:async()=> 'ID_TOKEN'};},signOut:async()=>{signouts++;auth.currentUser=null;}};
- w.loadSDK=async url=>url.endsWith('firebase-app.js')?{initializeApp:()=>({})}:lib;
- w.fetch=async(url,options)=>{
-  const body=JSON.parse(options.body);calls.push({body,options});if(delay)await delay;
-  if(failure)return {ok:false,json:async()=>({ok:false,code:failure})};
-  const result=body.op==='enroll'?{version:'P086-NATIVE-1',customToken:'CUSTOM',ticketHash:crypto.createHash('sha256').update(ticket).digest('hex')}:
-   body.op==='bootstrap'?{version:'P086-NATIVE-1',html:'<html><head><script data-native-p086></script><script type="application/json" id="deviceResumeBootstrap">{}</script></head><body>REAL_APP</body></html>',access:{identityKey:'id',deviceUser:'user'}}:{saved:true};
-  return {ok:true,json:async()=>({ok:true,result})};
- };
- vm.runInContext(source,dom.getInternalVMContext());
- const start=()=>w.IecNativeP086.start({frame,url:GAS,key:'key',nonce:'a'.repeat(64),current:()=>true,fallback:()=>fallback++});
- return {w,frame,auth,calls,start,setTicket:v=>ticket=v,setFailure:v=>failure=v,setDelay:v=>delay=v,counts:()=>({fallback,signins,signouts}),close:()=>{w.IecNativeP086.cancel();dom.window.close();}};
-}
+const {test}=require('node:test'),assert=require('node:assert/strict');
+const {fixture,settle}=require('./helpers/native-fixture.cjs');
 test('disabled native path does no SDK/network work',async()=>{const h=fixture();try{h.w.IEC_PWA_CONFIG.nativeP086=false;assert.equal(h.start(),false);await settle();assert.equal(h.calls.length,0);}finally{h.close();}});
 test('invitation mode performs no native work until this device opts in',async()=>{const h=fixture();try{h.w.IEC_PWA_CONFIG={nativeP086:false,nativeP086OptIn:true};assert.equal(h.start(),false);assert.equal(h.w.IecNativeP086.selected(),false);await settle();assert.equal(h.calls.length,0);assert.equal(h.counts().signins,0);}finally{h.close();}});
 test('device choice takes effect on next launch and does not clear tickets or start a request itself',async()=>{const h=fixture();try{h.w.IEC_PWA_CONFIG={nativeP086:false,nativeP086OptIn:true};h.w.localStorage.setItem('saved-existing-ticket','keep');h.w.IecNativeP086.choose(true);await settle();assert.equal(h.calls.length,0);assert.equal(h.w.localStorage.getItem('saved-existing-ticket'),'keep');assert.equal(h.start(),true);await settle();assert.deepEqual(h.calls.map(x=>x.body.op),['bootstrap']);h.w.IecNativeP086.cancel();h.w.IecNativeP086.choose(false);assert.equal(h.start(),false);assert.equal(h.w.localStorage.getItem('saved-existing-ticket'),'keep');}finally{h.close();}});

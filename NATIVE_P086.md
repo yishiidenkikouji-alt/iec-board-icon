@@ -12,3 +12,17 @@ Validation: `node scripts/build-entry.cjs --check`; the new `tests/native-*.cjs`
 
 
 D13 adds a current-launch diagnostic copy button. It projects numeric startup/card/talk timings, fixed error codes and current gate booleans only, so a history export cut off at 10,000 characters cannot hide the newest result. No extra network requests, stored history, arguments, user identity, token or URL are included. Runtime and permissions are unchanged. The backend P086-FIX-1 was independently verified by its published build ID; full authenticated talk readiness and current-card end-to-end timings still require the current device result.
+
+D14 / P086-FIX-2 overlaps one authorized current own-card request with private HTML bootstrap after server capability is learned. On the first supported launch it starts after bootstrap, before mounting the real UI. Only the exact initial self-card call may consume it once within three seconds; a different operation, late tab opening, changed user or navigation discards it. Ordinary reads and saves retain existing dispatch and at-most-once behavior. Talk/inbox entry does not start an unused card read. A rollback clears the capability hint and uses the ordinary read. The hint contains no authority or card data.
+
+The GAS startup-card scope reuses P074 daily-choice deferral; report choices are read on open with existing source/version checks. Card source logic, calendar rules, attendance writes and Firestore rules do not change. GAS still computes the source-derived row. This is an incremental scheduling/processing optimization, not a card-computation migration or latency guarantee. `leadMs` is the request head start, not measured time saved. `upstreamMs` includes transport, upstream waiting and GAS execution; do not sum it with `gasDispatchMs`.
+
+The startup-card response rechecks live access after GAS completes. It accepts no caller-selected identity, scope or method. The active HTTP operation is awaited until completion, with no fire-and-forget server work. The per-device opt-in and server allowlist remain unchanged.
+
+D14 also removes the fixed lower-right diagnostic launcher that could intercept
+the talk submit button. When the ordinary entry header is visible, use its
+diagnostic button. When the app's compact header hides it, diagnostics occupy a
+separate row outside the iframe, so they cannot cover a message, form or action.
+This layout correction works with the deployed P086-FIX-1 backend and does not
+require the FIX-2 backend installation. The FIX-2 speed path remains gated by the
+backend's capability response.

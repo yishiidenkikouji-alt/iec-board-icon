@@ -5,7 +5,7 @@
   'use strict';
   const ROOT=new URL('./',location.href);
   if(window.top!==window||ROOT.origin!=='https://yishiidenkikouji-alt.github.io'||ROOT.pathname!=='/iec-board-icon/board-pwa/')return;
-  const VERSION='2026.11.13-D13',URL_KEY='iec.board.pwa.gasUrl.v1';
+  const VERSION='2026.11.13-D14',URL_KEY='iec.board.pwa.gasUrl.v1';
   const PREFIX='iec.entry.resume.v1:'+ROOT.pathname+':';
   const TEST_KEY='iec.entry.diagnostic.v1:'+ROOT.pathname;
   const EXPECTED='https://script.google.com/macros/s/AKfycbyDl12j_i0NvCN45tSVgM0ngzAWE73hpuz69Mm9MMRQT_gZkrNJXgJNlGqAee-YG_7c/exec';
@@ -59,9 +59,17 @@
     connection:{saved:'端末の保存設定',backup:'端末の予備保存',common:'会社の共通設定',empty:'接続先なし',error:'予備保存の確認に失敗'}
   };
   const storageState={backup:'checking',protection:'unchecked',connection:'empty'};
-  const floating=document.createElement('button');floating.type='button';floating.id='connectionDiagnosticLauncherD3';floating.textContent='接続診断 D13';floating.setAttribute('aria-haspopup','dialog');
-  floating.style.cssText='position:fixed;right:max(10px,env(safe-area-inset-right,0px));bottom:calc(76px + env(safe-area-inset-bottom,0px));z-index:2000;min-height:44px;padding:9px 12px;border:1px solid #52687c;border-radius:10px;background:#fff;color:#203040;box-shadow:0 2px 8px #0003;font:14px/1.4 system-ui,sans-serif;';
-  floating.onclick=open;document.body.appendChild(floating);
+  const floating=document.createElement('button');floating.type='button';floating.id='connectionDiagnosticLauncherD3';floating.textContent='接続診断 D14';floating.setAttribute('aria-haspopup','dialog');
+  // Reserve space outside the application frame. A fixed bottom launcher covered
+  // the talk submit button, especially when its composer wrapped on a phone.
+  floating.style.cssText='min-height:44px;padding:9px 12px;border:1px solid #52687c;border-radius:10px;background:#fff;color:#203040;font:14px/1.4 system-ui,sans-serif;';
+  const launcherDock=document.createElement('div'),entryBar=document.getElementById('entryBar');
+  launcherDock.id='connectionDiagnosticDockD14';
+  launcherDock.style.cssText='order:-1;flex:0 0 auto;display:flex;justify-content:flex-end;padding:2px max(8px,env(safe-area-inset-right,0px)) 2px max(8px,env(safe-area-inset-left,0px));background:#eceff1;';
+  floating.onclick=open;launcherDock.appendChild(floating);document.body.appendChild(launcherDock);
+  function launcherVisibility(){launcherDock.hidden=!!(entryBar&&!entryBar.hidden)||(bridgeStatus==='ready'&&!(window.IEC_PWA_CONFIG||{}).nativeP086OptIn);}
+  if(entryBar)new MutationObserver(launcherVisibility).observe(entryBar,{attributes:true,attributeFilter:['hidden']});
+  launcherVisibility();
   function normalise(value){try{const u=new URL(String(value||'').trim());if(u.protocol!=='https:'||u.hostname!=='script.google.com'||u.port||u.username||u.password||!/^\/(?:a\/[^/]+\/)?macros\/s\/[A-Za-z0-9_-]{20,256}\/exec\/?$/.test(u.pathname))return '';return u.origin+u.pathname.replace(/\/$/,'');}catch(e){return '';}}
   function ticketStatus(url){
     if(!url)return '接続先がないため未確認';
@@ -93,14 +101,14 @@
     timingForApp:timingForApp,
     storage:function(kind,code){if(storageLabels[kind]&&Object.prototype.hasOwnProperty.call(storageLabels[kind],code)){storageState[kind]=code;refresh();}},
     session:function(code){if(Object.prototype.hasOwnProperty.call(labels,code)){stage=code;refresh();}},
-    bridge:function(status){if(['waiting','ready','unavailable','reset','no-user'].includes(status)){bridgeStatus=status;floating.hidden=status==='ready'&&!(window.IEC_PWA_CONFIG||{}).nativeP086OptIn;refresh();}},
+    bridge:function(status){if(['waiting','ready','unavailable','reset','no-user'].includes(status)){bridgeStatus=status;launcherVisibility();refresh();}},
     connection:function(ok){connectionSave=ok===true?'保存・読み戻し成功':'保存または読み戻しに失敗';refresh();}
   });
   function open(){
     if(!panel){
       panel=document.createElement('dialog');panel.id='connectionDiagnosticD1';panel.setAttribute('aria-label','接続診断');
       panel.style.cssText='box-sizing:border-box;width:calc(100% - 24px);max-width:620px;max-height:90dvh;overflow:auto;border:1px solid #b9c8d5;border-radius:12px;background:#fff;color:#203040;padding:18px;font:15px/1.6 system-ui,sans-serif;';
-      const h=document.createElement('h2');h.textContent='接続診断 D13';h.style.margin='0 0 8px';panel.appendChild(h);
+      const h=document.createElement('h2');h.textContent='接続診断 D14';h.style.margin='0 0 8px';panel.appendChild(h);
       if(window.IecNativeP086&&typeof window.IecNativeP086.diagnostics==='function'){
         const copy=document.createElement('button');copy.type='button';copy.textContent='今回の起動診断をコピー';copy.style.cssText='padding:10px 12px;min-height:44px;font:inherit;';
         copy.onclick=async function(){

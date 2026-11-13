@@ -60,16 +60,21 @@ async function main(){
  // Diagnostics missing / broken cannot block normal authentication.
  e=env(new Map([[URL_KEY,url],[key,stored]]));delete e.ctx.IecConnectionDiagnosticsD1;e.run('entry-session.js');e.frame.src=url;nonce=new URL(e.frame.src).searchParams.get('iec_resume_nonce');await e.message({...base,nonce,type:'hello'});assert.equal(e.replies.at(-1).d.ticket,ticket);
  e=env(new Map([[URL_KEY,url],[key,stored]]));e.ctx.IecConnectionDiagnosticsD1={session(){throw Error('broken UI');}};e.run('entry-session.js');e.frame.src=url;nonce=new URL(e.frame.src).searchParams.get('iec_resume_nonce');await e.message({...base,nonce,type:'hello'});assert.equal(e.replies.at(-1).d.ticket,ticket);
- const html=fs.readFileSync(dir+'index.html','utf8'),sw=fs.readFileSync(dir+'sw.js','utf8');assert.ok(html.includes('entry-startup-d13.js'));const bundle=fs.readFileSync(dir+'entry-startup-d13.js','utf8');assert.ok(bundle.indexOf('/* connection-diagnostics.js */')<bundle.indexOf('/* entry-session.js */'));assert.ok(sw.includes("'./connection-diagnostics.js'"));assert.ok(sw.includes('v57-entry-d13'));
+ const html=fs.readFileSync(dir+'index.html','utf8'),sw=fs.readFileSync(dir+'sw.js','utf8');assert.ok(html.includes('entry-startup-d14.js'));const bundle=fs.readFileSync(dir+'entry-startup-d14.js','utf8');assert.ok(bundle.indexOf('/* connection-diagnostics.js */')<bundle.indexOf('/* entry-session.js */'));assert.ok(sw.includes("'./connection-diagnostics.js'"));assert.ok(sw.includes('v58-entry-d14'));
  
- // Registration overlay is inside GAS; diagnostic launcher belongs to the parent body.
+ // The compact-header diagnostic control reserves space outside the iframe;
+ // the ordinary visible header already has its own diagnostic button.
  e=env();e.run('entry-session.js');e.run('app.js');e.elements.entryBar.hidden=true;
- let launcher=e.ctx.document.body.children.find(n=>n.id==='connectionDiagnosticLauncherD3');
- assert.ok(launcher);assert.equal(launcher.parentNode,e.ctx.document.body);assert.equal(launcher.hidden,false);
- launcher.onclick();assert.match(e.text(),/接続診断 2026.11.13-D13/);
- e.ctx.IecConnectionDiagnosticsD1.bridge('ready');assert.equal(launcher.hidden,true);
- for(const status of ['no-user','reset','waiting','unavailable']){e.ctx.IecConnectionDiagnosticsD1.bridge(status);assert.equal(launcher.hidden,false);}
- e.ctx.IecConnectionDiagnosticsD1.bridge('ready');e.ctx.IecConnectionDiagnosticsD1.bridge('untrusted');assert.equal(launcher.hidden,true);
+ let dock=e.ctx.document.body.children.find(n=>n.id==='connectionDiagnosticDockD14'),launcher=dock.children[0];
+ assert.ok(launcher);assert.equal(dock.parentNode,e.ctx.document.body);
+ e.ctx.IecConnectionDiagnosticsD1.bridge('waiting');assert.equal(dock.hidden,false);
+ assert.doesNotMatch(dock.style.cssText+launcher.style.cssText,/position:\s*(fixed|absolute)/);
+ launcher.onclick();assert.match(e.text(),/接続診断 2026.11.13-D14/);
+ e.ctx.IecConnectionDiagnosticsD1.bridge('ready');assert.equal(dock.hidden,true);
+ for(const status of ['no-user','reset','waiting','unavailable']){e.ctx.IecConnectionDiagnosticsD1.bridge(status);assert.equal(dock.hidden,false);}
+ e.ctx.IecConnectionDiagnosticsD1.bridge('ready');e.ctx.IecConnectionDiagnosticsD1.bridge('untrusted');assert.equal(dock.hidden,true);
+ e.ctx.IEC_PWA_CONFIG.nativeP086OptIn=true;e.ctx.IecConnectionDiagnosticsD1.bridge('ready');assert.equal(dock.hidden,false);
+ e.elements.entryBar.hidden=false;e.ctx.IecConnectionDiagnosticsD1.bridge('ready');assert.equal(dock.hidden,true);
  console.log('PASS: D3 launcher outside hidden GAS/header, bridge visibility,  startup/current states, persistence marker across reload, denied/dropped storage, malformed data, redaction/copy, resume protocol origin/nonce/source/conflict/save/remove, real app submit, missing/broken diagnostics isolation, SW inclusion.');
 }
 module.exports={env,url,key,ticket,revision,stored,URL_KEY,TEST_KEY,ROOT,tick};

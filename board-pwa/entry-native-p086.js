@@ -4,6 +4,10 @@
  const API='https://asia-northeast1-ishii-board-trial-p003.cloudfunctions.net/businessAppP086';
  const GAS='https://script.google.com/macros/s/AKfycbyDl12j_i0NvCN45tSVgM0ngzAWE73hpuz69Mm9MMRQT_gZkrNJXgJNlGqAee-YG_7c/exec';
  const CHOICE='iec.entry.native.p086:/iec-board-icon/board-pwa/';
+ const CARD_CAP='iec.entry.card.p086:/iec-board-icon/board-pwa/';
+ // A capability hint only. Every read still requires current server authorization.
+ function cardCapability(value){try{if(value===undefined)return localStorage.getItem(CARD_CAP)==='P086-CARD-1';if(value)localStorage.setItem(CARD_CAP,'P086-CARD-1');else localStorage.removeItem(CARD_CAP);}catch(ignore){}return false;}
+ function wantsCard(){try{return typeof window.IecEntryStartViewP082!=='function'||window.IecEntryStartViewP082()==='personal';}catch(ignore){return false;}}
  function selected(){try{return localStorage.getItem(CHOICE)==='1';}catch(ignore){return false;}}
  function enabled(){const c=window.IEC_PWA_CONFIG||{};return c.nativeP086===true||(c.nativeP086OptIn===true&&selected());}
  function choose(value){
@@ -22,11 +26,12 @@
   try{const w=s.frame.contentWindow;extra=typeof w.IecNativeReportP086==='function'?(w.IecNativeReportP086()||{}):{};talk=w.IecTalkP012?(w.IecTalkP012.diagnostics()||{}):{};}catch(ignore){}
   const report={version:'P086-ENTRY-DIAG-1',at:s.at,background:s.background,operationReadyP086:{
    version:'P086-OPERATIONS-1',path:'firebase',...numbers(s.metrics,['screenReadyMs','latestCardMs','talkReadyMs','privateHtmlMs','bootstrapMs']),gasCalls:number(s.gasCalls),
-   revision:extra.revision==='P086-FIX-1'?'P086-FIX-1':'unconfirmed',
+   revision:['P086-FIX-1','P086-FIX-2'].includes(extra.revision)?extra.revision:'unconfirmed',
    rpcErrors:(Array.isArray(extra.rpcErrors)?extra.rpcErrors:[]).filter(e=>e&&typeof e==='object').slice(-8).map(e=>({
     method:typeof e.method==='string'&&/^[A-Za-z][A-Za-z0-9_]{0,89}$/.test(e.method)?e.method:'unknown',
     code:['AUTH','RECONNECT','REQUEST','NORMAL_ENTRY_REQUIRED','DUPLICATE','RPC','UNAVAILABLE','RATE_LIMIT','UNKNOWN'].includes(e.code)?e.code:'UNKNOWN'
-   })),cardTransport:extra.cardTransport?{version:extra.cardTransport.version==='P086-READ-2'?'P086-READ-2':'unconfirmed',...numbers(extra.cardTransport,['resumeMs','gateMs','rpcMs','gasDispatchMs','bulkReads','propertyReadsAvoided','bulkMs'])}:null},
+   })),cardTransport:extra.cardTransport?{version:['P086-READ-2','P086-READ-3'].includes(extra.cardTransport.version)?extra.cardTransport.version:'unconfirmed',dailyOptionsDeferred:extra.cardTransport.dailyOptionsDeferred===true,...numbers(extra.cardTransport,['resumeMs','gateMs','rpcMs','gasDispatchMs','bulkReads','propertyReadsAvoided','bulkMs','cloudAuthMs','upstreamMs','cloudTotalMs'])}:null,
+   cardRequestP086:{version:'P086-CARD-1',state:s.cardMetrics.state,...numbers(s.cardMetrics,['startedMs','requestedMs','receivedMs','leadMs'])}},
    talk:{connected:talk.connected===true,directActive:!!(talk.direct&&talk.direct.active),
     connection:numbers(talk.connection,['sdkMs','issueMs','signInMs','claimsMs','firstSnapshotMs','totalMs']),
     gates:Object.fromEntries(['person','device','control','feed'].map(k=>[k,!!(talk.permissionGatesP071&&talk.permissionGatesP071[k])]))}};
@@ -46,7 +51,8 @@
  function scriptJson(x){return JSON.stringify(x).replace(/[<>&\u2028\u2029]/g,c=>'\\u'+c.charCodeAt(0).toString(16).padStart(4,'0'));}
  function start(o){
   if(!enabled()||o.url!==GAS)return false;
-  cancel();const s={cancelled:false,attached:false,check:null,ticketHash:'',key:o.key,originTicket:'',gasCalls:0,checking:false,
+  cancel();const s={cancelled:false,attached:false,check:null,ticketHash:'',key:o.key,originTicket:'',gasCalls:0,checking:false,card:null,cardAttempted:false,
+   cardMetrics:{state:'not-started',startedMs:null,requestedMs:null,receivedMs:null,leadMs:null},
    metrics:{version:'P086-OPERATIONS-1',path:'firebase',screenReadyMs:null,latestCardMs:null,talkReadyMs:null,privateHtmlMs:null,bootstrapMs:null}};
   active=s;const current=()=>active===s&&!s.cancelled&&o.current();
   s.current=current;s.frame=o.frame;s.at=new Date().toISOString();s.background=!!document.hidden;
@@ -68,6 +74,40 @@
     return data.result;
    }finally{clearTimeout(timer);}
   }
+  function discardCard(){if(s.card){s.card=null;s.cardMetrics.state='discarded';}}
+  function startCard(){
+   if(s.cardAttempted||!current()||document.hidden||!wantsCard())return;
+   s.cardAttempted=true;const p={started:performance.now(),claimed:false};s.card=p;s.gasCalls++;
+   s.cardMetrics={state:'started',startedMs:Math.round(p.started),requestedMs:null,receivedMs:null,leadMs:null};
+   // Keep the active HTTP request alive until GAS finishes. This is a new live
+   // read for this launch, not a stored previous card or a server background job.
+   p.promise=request({op:'startupCard',requestId:random()}).then(value=>{
+    if(current()&&(s.card===p||p.claimed))s.cardMetrics.receivedMs=Math.round(performance.now());
+    return {value};
+   },error=>({error})); // Always observe rejection, including discarded launches.
+   setTimeout(()=>{if(current()&&s.card===p&&!p.claimed)discardCard();},3000);
+  }
+  async function takeCard(args,context,access){
+   const p=s.card;if(!p||p.claimed)return null;
+   const c=context||{},expected=[access.identityKey,access.deviceUser,String(access.adminToken||''),false,true];
+   if(performance.now()-p.started>3000||!wantsCard()||JSON.stringify(args)!==JSON.stringify(expected)||
+      c.id!==expected[0]||c.user!==expected[1]||String(c.token||'')!==expected[2]||c.confirm231){discardCard();return null;}
+   await unchanged();if(s.card!==p)return null;
+   p.claimed=true;s.card=null;s.cardMetrics.state='consumed';s.cardMetrics.requestedMs=Math.round(performance.now());
+   s.cardMetrics.leadMs=Math.max(0,Math.round(performance.now()-p.started));
+   const answer=await p.promise;
+   if(!current())throw Error('navigation');
+   await unchanged();
+   // A rollback to FIX1 rejects the unsupported operation before dispatch.
+   // Only this exact read can fall back; saves are never repeated here.
+   if(answer.error){
+    s.card=null;s.cardMetrics.state=answer.error.code==='REQUEST'?'unsupported':'failed';
+    if(answer.error.code==='REQUEST'){cardCapability(false);return null;}
+    throw answer.error;
+   }
+   s.card=null;s.cardMetrics.state='complete';
+   return {value:answer.value};
+  }
   function invalidate(){
    if(!current())return;s.cancelled=true;clearInterval(s.check);
    try{o.frame.contentWindow.suspendDeviceIdentity_('本人確認を更新してください。入口を開き直してください。');}catch(ignore){}
@@ -80,7 +120,7 @@
    s.originTicket=saved.ticket;s.ticketHash=await hash(saved.ticket);
    const {auth,lib}=await sdk();await signInQueue;if(!current())return;let result;
    const started=performance.now();
-   if(auth.currentUser)try{result=await request({op:'bootstrap'});}catch(e){if(!['AUTH','RECONNECT'].includes(e.code))throw e;}
+   if(auth.currentUser)try{if(cardCapability())startCard();result=await request({op:'bootstrap'});}catch(e){discardCard();if(!['AUTH','RECONNECT'].includes(e.code))throw e;}
    if(!result){
     const grant=await request({op:'enroll',ticket:saved.ticket},false);
     if(!current()||grant.version!=='P086-NATIVE-1'||grant.ticketHash!==s.ticketHash)throw Error('grant');
@@ -88,11 +128,16 @@
     result=await request({op:'bootstrap'});
    }
    if(!current()||result.version!=='P086-NATIVE-1'||typeof result.html!=='string'||!result.html.includes('data-native-p086'))throw Error('bootstrap');
+   const supported=result.startupCardP086==='P086-CARD-1';cardCapability(supported);
+   if(supported)startCard();else discardCard();
    s.metrics.bootstrapMs=Math.round(performance.now()-started);
    const host={access:result.access,nonce:o.nonce,matches:w=>current()&&w===o.frame.contentWindow,
     call:async(w,method,args,context)=>{
      if(!host.matches(w))throw Error('navigation');
-     try{if(!['getClientModule212','issueFirebaseP012','getDeviceAccessConfigV2'].includes(method))s.gasCalls++;
+     try{
+      if(method==='getHomeBoard123'){const early=await takeCard(args,context,result.access);if(early)return early.value;}
+      else if(!['getClientModule212','issueFirebaseP012','getDeviceAccessConfigV2'].includes(method))discardCard();
+      if(!['getClientModule212','issueFirebaseP012','getDeviceAccessConfigV2'].includes(method))s.gasCalls++;
       return await request({op:'rpc',method,args,context,requestId:random()});
      }catch(e){if(['AUTH','RECONNECT'].includes(e.code))invalidate();throw e;}
     },
