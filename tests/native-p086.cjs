@@ -32,3 +32,19 @@ test('failed initial bootstrap returns to the ordinary app once',async()=>{const
 test('an operation timeout does not fall back and resend through GAS',async()=>{const h=fixture();try{h.start();await settle();h.setFailure('UNAVAILABLE');await assert.rejects(h.w.IecNativeHost.call(h.frame.contentWindow,'submitDailyReport',[],{}));assert.equal(h.counts().fallback,0);assert.equal(h.calls.filter(x=>x.body.op==='rpc').length,1);}finally{h.close();}});
 test('changed saved user invalidates the old app before another RPC can be sent',async()=>{const h=fixture();try{h.start();await settle();h.setTicket('other-ticket');await assert.rejects(h.w.IecNativeHost.call(h.frame.contentWindow,'submitDailyReport',[],{}));await settle();assert.equal(h.calls.filter(x=>x.body.op==='rpc').length,0);assert.equal(h.counts().signouts,1);assert(!h.frame.srcdoc.includes('REAL_APP'));}finally{h.close();}});
 test('foreign frame and late bootstrap after navigation cannot call or restore private app',async()=>{const h=fixture();try{h.start();await settle();await assert.rejects(h.w.IecNativeHost.call({},'submitDailyReport',[],{}));h.w.IecNativeP086.cancel();assert.equal(h.w.IecNativeHost,null);}finally{h.close();}});
+test('current-launch diagnostic is short, excludes secrets/history, and performs no requests',async()=>{
+ const h=fixture();try{
+  assert.equal(h.w.IecNativeP086.diagnostics(),null);h.start();await settle();
+  h.w.localStorage.setItem('IEC_DIAGNOSTICS232','SECRET_OLD_HISTORY');
+  h.frame.contentWindow.IecNativeReportP086=()=>({revision:'P086-FIX-1',ticket:'SECRET_TICKET',
+   rpcErrors:[{method:'issueFirebaseP012',code:'REQUEST',message:'SECRET_ERROR',context:'SECRET_USER'}],
+   cardTransport:{version:'P086-READ-2',resumeMs:100,gateMs:150,rpcMs:800,gasDispatchMs:1050,secret:'SECRET_KEY'}});
+  h.frame.contentWindow.IecTalkP012={diagnostics:()=>({connected:true,direct:{active:true,rooms:8},
+   connection:{issueMs:707,totalMs:1800,customToken:'SECRET_TOKEN'},permissionGatesP071:{person:true,device:true,control:true,feed:true},identity:'SECRET_ID'})};
+  const n=h.calls.length,r=h.w.IecNativeP086.diagnostics(),text=JSON.stringify(r);
+  assert.equal(r.operationReadyP086.revision,'P086-FIX-1');assert.equal(r.operationReadyP086.cardTransport.resumeMs,100);
+  assert.equal(r.talk.connection.issueMs,707);assert.equal(r.talk.connected,true);assert(text.length<3000);
+  assert(!text.includes('SECRET'));assert(!text.includes('ID_TOKEN'));assert(!text.includes('https://'));
+  assert.equal(h.calls.length,n);h.w.IecNativeP086.cancel();assert.equal(h.w.IecNativeP086.diagnostics(),null);
+ }finally{h.close();}
+});

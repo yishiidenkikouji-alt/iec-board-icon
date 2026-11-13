@@ -5,7 +5,7 @@
   'use strict';
   const ROOT=new URL('./',location.href);
   if(window.top!==window||ROOT.origin!=='https://yishiidenkikouji-alt.github.io'||ROOT.pathname!=='/iec-board-icon/board-pwa/')return;
-  const VERSION='2026.11.13-D12',URL_KEY='iec.board.pwa.gasUrl.v1';
+  const VERSION='2026.11.13-D13',URL_KEY='iec.board.pwa.gasUrl.v1';
   const PREFIX='iec.entry.resume.v1:'+ROOT.pathname+':';
   const TEST_KEY='iec.entry.diagnostic.v1:'+ROOT.pathname;
   const EXPECTED='https://script.google.com/macros/s/AKfycbyDl12j_i0NvCN45tSVgM0ngzAWE73hpuz69Mm9MMRQT_gZkrNJXgJNlGqAee-YG_7c/exec';
@@ -59,7 +59,7 @@
     connection:{saved:'端末の保存設定',backup:'端末の予備保存',common:'会社の共通設定',empty:'接続先なし',error:'予備保存の確認に失敗'}
   };
   const storageState={backup:'checking',protection:'unchecked',connection:'empty'};
-  const floating=document.createElement('button');floating.type='button';floating.id='connectionDiagnosticLauncherD3';floating.textContent='接続診断 D12';floating.setAttribute('aria-haspopup','dialog');
+  const floating=document.createElement('button');floating.type='button';floating.id='connectionDiagnosticLauncherD3';floating.textContent='接続診断 D13';floating.setAttribute('aria-haspopup','dialog');
   floating.style.cssText='position:fixed;right:max(10px,env(safe-area-inset-right,0px));bottom:calc(76px + env(safe-area-inset-bottom,0px));z-index:2000;min-height:44px;padding:9px 12px;border:1px solid #52687c;border-radius:10px;background:#fff;color:#203040;box-shadow:0 2px 8px #0003;font:14px/1.4 system-ui,sans-serif;';
   floating.onclick=open;document.body.appendChild(floating);
   function normalise(value){try{const u=new URL(String(value||'').trim());if(u.protocol!=='https:'||u.hostname!=='script.google.com'||u.port||u.username||u.password||!/^\/(?:a\/[^/]+\/)?macros\/s\/[A-Za-z0-9_-]{20,256}\/exec\/?$/.test(u.pathname))return '';return u.origin+u.pathname.replace(/\/$/,'');}catch(e){return '';}}
@@ -100,7 +100,18 @@
     if(!panel){
       panel=document.createElement('dialog');panel.id='connectionDiagnosticD1';panel.setAttribute('aria-label','接続診断');
       panel.style.cssText='box-sizing:border-box;width:calc(100% - 24px);max-width:620px;max-height:90dvh;overflow:auto;border:1px solid #b9c8d5;border-radius:12px;background:#fff;color:#203040;padding:18px;font:15px/1.6 system-ui,sans-serif;';
-      const h=document.createElement('h2');h.textContent='接続診断 D12';h.style.margin='0 0 8px';panel.appendChild(h);
+      const h=document.createElement('h2');h.textContent='接続診断 D13';h.style.margin='0 0 8px';panel.appendChild(h);
+      if(window.IecNativeP086&&typeof window.IecNativeP086.diagnostics==='function'){
+        const copy=document.createElement('button');copy.type='button';copy.textContent='今回の起動診断をコピー';copy.style.cssText='padding:10px 12px;min-height:44px;font:inherit;';
+        copy.onclick=async function(){
+          const current=window.IecNativeP086.diagnostics();
+          if(!current){status.textContent='今回の新しい起動方式の記録はありません。「結果をコピー」で接続診断を共有してください。';return;}
+          const text=JSON.stringify(current,null,2);output.value=text;
+          try{await navigator.clipboard.writeText(text);status.textContent='今回1回分の起動診断をコピーしました。そのまま貼り付けて送ってください。';}
+          catch(ignore){output.focus();output.select();status.textContent='選択した今回の起動診断をコピーしてください。';}
+        };
+        panel.appendChild(copy);
+      }
       if((window.IEC_PWA_CONFIG||{}).nativeP086OptIn===true&&window.IecNativeP086){
         const native=window.IecNativeP086,description=document.createElement('p'),choice=document.createElement('button'),notice=document.createElement('p');
         description.textContent='起動方式の切り替え：利用を案内された端末で設定してください。設定は次回起動から適用されます。';

@@ -1,4 +1,4 @@
-The ordinary entry now removes the P085 previous-card splash and its extra preparation request. D12 preserves existing device tickets and normal GAS startup.
+The ordinary entry now removes the P085 previous-card splash and its extra preparation request. D13 preserves existing device tickets and normal GAS startup.
 
 The backend build `bbd943038bebb293ffc8ea2d672e55594d2d349bf9081e63390827d3a8262b34` is deployed. Health, exact-origin CORS, and unauthenticated bootstrap rejection were verified on 2026-11-13. General rollout remains off (`nativeP086: false`). `nativeP086OptIn: true` exposes a device-only choice in connection diagnostics: the invited user can enable the new startup on their existing home-screen app. Without that explicit choice, the entry performs no native SDK or backend work. The local choice only selects transport; all server permissions and the initial one-user restriction remain in force. Old D11 bundles see the false general flag and keep normal startup.
 
@@ -9,3 +9,6 @@ When enabled, the current device ticket enrolls a separate native Firebase sessi
 The paid project is unchanged. The backend package is private; no GAS source, credentials, private HTML, identity, or ledger data is committed here. Source transformations and backend tests are in the user's P086 package. For rollback, set both `nativeP086` and `nativeP086OptIn` to false. A device can also turn its choice off through connection diagnostics; this does not clear its identity ticket or reload unsaved forms.
 
 Validation: `node scripts/build-entry.cjs --check`; the new `tests/native-*.cjs` checks use Node's test runner and jsdom 26.1.0. Install jsdom in a temporary directory or use the backend package's node_modules through NODE_PATH when running them. Existing entry regression scripts use Node alone.
+
+
+D13 adds a current-launch diagnostic copy button. It projects numeric startup/card/talk timings, fixed error codes and current gate booleans only, so a history export cut off at 10,000 characters cannot hide the newest result. No extra network requests, stored history, arguments, user identity, token or URL are included. Runtime and permissions are unchanged. The backend P086-FIX-1 was independently verified by its published build ID; full authenticated talk readiness and current-card end-to-end timings still require the current device result.

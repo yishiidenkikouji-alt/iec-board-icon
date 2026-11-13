@@ -13,6 +13,25 @@
   return value;
  }
  let sdkPromise=null,active=null,signInQueue=Promise.resolve();
+ document.addEventListener('visibilitychange',()=>{if(document.hidden&&active&&(active.metrics.latestCardMs===null||active.metrics.talkReadyMs===null))active.background=true;});
+ const number=v=>typeof v==='number'&&Number.isFinite(v)&&v>=0&&v<=86400000?Math.round(v):null;
+ function numbers(source,keys){const out={};for(const k of keys)out[k]=number(source&&source[k]);return out;}
+ function currentDiagnostics(){
+  const s=active;if(!s||s.cancelled||!s.attached||!s.current())return null;
+  let extra={},talk={};
+  try{const w=s.frame.contentWindow;extra=typeof w.IecNativeReportP086==='function'?(w.IecNativeReportP086()||{}):{};talk=w.IecTalkP012?(w.IecTalkP012.diagnostics()||{}):{};}catch(ignore){}
+  const report={version:'P086-ENTRY-DIAG-1',at:s.at,background:s.background,operationReadyP086:{
+   version:'P086-OPERATIONS-1',path:'firebase',...numbers(s.metrics,['screenReadyMs','latestCardMs','talkReadyMs','privateHtmlMs','bootstrapMs']),gasCalls:number(s.gasCalls),
+   revision:extra.revision==='P086-FIX-1'?'P086-FIX-1':'unconfirmed',
+   rpcErrors:(Array.isArray(extra.rpcErrors)?extra.rpcErrors:[]).filter(e=>e&&typeof e==='object').slice(-8).map(e=>({
+    method:typeof e.method==='string'&&/^[A-Za-z][A-Za-z0-9_]{0,89}$/.test(e.method)?e.method:'unknown',
+    code:['AUTH','RECONNECT','REQUEST','NORMAL_ENTRY_REQUIRED','DUPLICATE','RPC','UNAVAILABLE','RATE_LIMIT','UNKNOWN'].includes(e.code)?e.code:'UNKNOWN'
+   })),cardTransport:extra.cardTransport?{version:extra.cardTransport.version==='P086-READ-2'?'P086-READ-2':'unconfirmed',...numbers(extra.cardTransport,['resumeMs','gateMs','rpcMs','gasDispatchMs','bulkReads','propertyReadsAvoided','bulkMs'])}:null},
+   talk:{connected:talk.connected===true,directActive:!!(talk.direct&&talk.direct.active),
+    connection:numbers(talk.connection,['sdkMs','issueMs','signInMs','claimsMs','firstSnapshotMs','totalMs']),
+    gates:Object.fromEntries(['person','device','control','feed'].map(k=>[k,!!(talk.permissionGatesP071&&talk.permissionGatesP071[k])]))}};
+  return report;
+ }
  const random=()=>Array.from(crypto.getRandomValues(new Uint8Array(16)),v=>v.toString(16).padStart(2,'0')).join('');
  const hash=async text=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text))),v=>v.toString(16).padStart(2,'0')).join('');
  function sdk(){
@@ -30,6 +49,7 @@
   cancel();const s={cancelled:false,attached:false,check:null,ticketHash:'',key:o.key,originTicket:'',gasCalls:0,checking:false,
    metrics:{version:'P086-OPERATIONS-1',path:'firebase',screenReadyMs:null,latestCardMs:null,talkReadyMs:null,privateHtmlMs:null,bootstrapMs:null}};
   active=s;const current=()=>active===s&&!s.cancelled&&o.current();
+  s.current=current;s.frame=o.frame;s.at=new Date().toISOString();s.background=!!document.hidden;
   function failBeforeStart(){if(!current()||s.attached)return;cancel();o.fallback();}
   async function unchanged(){
    const saved=await window.IecDeviceStorageD3.readTicket(o.key,current);
@@ -88,5 +108,5 @@
   }
   void launch().catch(failBeforeStart);return true;
  }
- window.IecNativeP086=Object.freeze({start,cancel,selected,choose,active:()=>!!(active&&active.attached&&!active.cancelled)});
+ window.IecNativeP086=Object.freeze({start,cancel,selected,choose,diagnostics:currentDiagnostics,active:()=>!!(active&&active.attached&&!active.cancelled)});
 })();

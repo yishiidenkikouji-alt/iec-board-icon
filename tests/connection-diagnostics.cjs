@@ -60,13 +60,13 @@ async function main(){
  // Diagnostics missing / broken cannot block normal authentication.
  e=env(new Map([[URL_KEY,url],[key,stored]]));delete e.ctx.IecConnectionDiagnosticsD1;e.run('entry-session.js');e.frame.src=url;nonce=new URL(e.frame.src).searchParams.get('iec_resume_nonce');await e.message({...base,nonce,type:'hello'});assert.equal(e.replies.at(-1).d.ticket,ticket);
  e=env(new Map([[URL_KEY,url],[key,stored]]));e.ctx.IecConnectionDiagnosticsD1={session(){throw Error('broken UI');}};e.run('entry-session.js');e.frame.src=url;nonce=new URL(e.frame.src).searchParams.get('iec_resume_nonce');await e.message({...base,nonce,type:'hello'});assert.equal(e.replies.at(-1).d.ticket,ticket);
- const html=fs.readFileSync(dir+'index.html','utf8'),sw=fs.readFileSync(dir+'sw.js','utf8');assert.ok(html.includes('entry-startup-d12.js'));const bundle=fs.readFileSync(dir+'entry-startup-d12.js','utf8');assert.ok(bundle.indexOf('/* connection-diagnostics.js */')<bundle.indexOf('/* entry-session.js */'));assert.ok(sw.includes("'./connection-diagnostics.js'"));assert.ok(sw.includes('v56-entry-d12'));
+ const html=fs.readFileSync(dir+'index.html','utf8'),sw=fs.readFileSync(dir+'sw.js','utf8');assert.ok(html.includes('entry-startup-d13.js'));const bundle=fs.readFileSync(dir+'entry-startup-d13.js','utf8');assert.ok(bundle.indexOf('/* connection-diagnostics.js */')<bundle.indexOf('/* entry-session.js */'));assert.ok(sw.includes("'./connection-diagnostics.js'"));assert.ok(sw.includes('v57-entry-d13'));
  
  // Registration overlay is inside GAS; diagnostic launcher belongs to the parent body.
  e=env();e.run('entry-session.js');e.run('app.js');e.elements.entryBar.hidden=true;
  let launcher=e.ctx.document.body.children.find(n=>n.id==='connectionDiagnosticLauncherD3');
  assert.ok(launcher);assert.equal(launcher.parentNode,e.ctx.document.body);assert.equal(launcher.hidden,false);
- launcher.onclick();assert.match(e.text(),/接続診断 2026.11.13-D12/);
+ launcher.onclick();assert.match(e.text(),/接続診断 2026.11.13-D13/);
  e.ctx.IecConnectionDiagnosticsD1.bridge('ready');assert.equal(launcher.hidden,true);
  for(const status of ['no-user','reset','waiting','unavailable']){e.ctx.IecConnectionDiagnosticsD1.bridge(status);assert.equal(launcher.hidden,false);}
  e.ctx.IecConnectionDiagnosticsD1.bridge('ready');e.ctx.IecConnectionDiagnosticsD1.bridge('untrusted');assert.equal(launcher.hidden,true);
