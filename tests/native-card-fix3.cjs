@@ -44,3 +44,12 @@ test('only known timing numbers and discard codes appear in the diagnostic repor
   const d=h.w.IecNativeP086.diagnostics();assert.equal(d.operationReadyP086.revision,'P086-FIX-3');assert.equal(d.operationReadyP086.cardTransport.upstreamPostMs,1234);assert(!JSON.stringify(d).includes('SECRET'));
  }finally{h.close();}
 });
+
+test('FIX6 diagnosis identifies the new nonce store and rejects unknown store text',async()=>{
+ const h=fixture({capability:true,supported:true});try{h.start();await settle();
+  for(const store of ['firestore-create-v2','legacy-script-lock-v1','PRIVATE']){
+   h.frame.contentWindow.IecNativeReportP086=()=>({revision:'P086-FIX-6',cardTransport:{version:'P086-READ-5',nonceStoreP086:store,gasLockWaitMs:0,gasNonceMs:240}});
+   const d=h.w.IecNativeP086.diagnostics().operationReadyP086;assert.equal(d.revision,'P086-FIX-6');assert.equal(d.cardTransport.version,'P086-READ-5');assert.equal(d.cardTransport.gasLockWaitMs,0);assert.equal(d.cardTransport.nonceStoreP086,store==='PRIVATE'?'unconfirmed':store);assert.doesNotMatch(JSON.stringify(d),/PRIVATE/);
+  }
+ }finally{h.close();}
+});
