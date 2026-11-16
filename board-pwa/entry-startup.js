@@ -8,7 +8,7 @@
   'use strict';
   const ROOT=new URL('./',location.href);
   if(window.top!==window||ROOT.origin!=='https://yishiidenkikouji-alt.github.io'||ROOT.pathname!=='/iec-board-icon/board-pwa/')return;
-  const VERSION='2026.11.16-D19',URL_KEY='iec.board.pwa.gasUrl.v1';
+  const VERSION='2026.11.16-D20',URL_KEY='iec.board.pwa.gasUrl.v1';
   const PREFIX='iec.entry.resume.v1:'+ROOT.pathname+':';
   const TEST_KEY='iec.entry.diagnostic.v1:'+ROOT.pathname;
   const EXPECTED='https://script.google.com/macros/s/AKfycbyDl12j_i0NvCN45tSVgM0ngzAWE73hpuz69Mm9MMRQT_gZkrNJXgJNlGqAee-YG_7c/exec';
@@ -62,12 +62,12 @@
     connection:{saved:'端末の保存設定',backup:'端末の予備保存',common:'会社の共通設定',empty:'接続先なし',error:'予備保存の確認に失敗'}
   };
   const storageState={backup:'checking',protection:'unchecked',connection:'empty'};
-  const floating=document.createElement('button');floating.type='button';floating.id='connectionDiagnosticLauncherD3';floating.textContent='接続診断 D19';floating.setAttribute('aria-haspopup','dialog');
+  const floating=document.createElement('button');floating.type='button';floating.id='connectionDiagnosticLauncherD3';floating.textContent='接続診断 D20';floating.setAttribute('aria-haspopup','dialog');
   // Reserve space outside the application frame. A fixed bottom launcher covered
   // the talk submit button, especially when its composer wrapped on a phone.
   floating.style.cssText='min-height:44px;padding:9px 12px;border:1px solid #52687c;border-radius:10px;background:#fff;color:#203040;font:14px/1.4 system-ui,sans-serif;';
   const launcherDock=document.createElement('div'),entryBar=document.getElementById('entryBar');
-  launcherDock.id='connectionDiagnosticDockD19';
+  launcherDock.id='connectionDiagnosticDockD20';
   launcherDock.style.cssText='order:-1;flex:0 0 auto;display:flex;justify-content:flex-end;padding:2px max(8px,env(safe-area-inset-right,0px)) 2px max(8px,env(safe-area-inset-left,0px));background:#eceff1;';
   floating.onclick=open;launcherDock.appendChild(floating);document.body.appendChild(launcherDock);
   function launcherVisibility(){launcherDock.hidden=!!(entryBar&&!entryBar.hidden)||(bridgeStatus==='ready'&&!(window.IEC_PWA_CONFIG||{}).nativeP086OptIn);}
@@ -111,7 +111,7 @@
     if(!panel){
       panel=document.createElement('dialog');panel.id='connectionDiagnosticD1';panel.setAttribute('aria-label','接続診断');
       panel.style.cssText='box-sizing:border-box;width:calc(100% - 24px);max-width:620px;max-height:90dvh;overflow:auto;border:1px solid #b9c8d5;border-radius:12px;background:#fff;color:#203040;padding:18px;font:15px/1.6 system-ui,sans-serif;';
-      const h=document.createElement('h2');h.textContent='接続診断 D19';h.style.margin='0 0 8px';panel.appendChild(h);
+      const h=document.createElement('h2');h.textContent='接続診断 D20';h.style.margin='0 0 8px';panel.appendChild(h);
       if(window.IecNativeP086&&typeof window.IecNativeP086.diagnostics==='function'){
         const copy=document.createElement('button');copy.type='button';copy.textContent='今回の起動診断をコピー';copy.style.cssText='padding:10px 12px;min-height:44px;font:inherit;';
         copy.onclick=async function(){
@@ -242,7 +242,7 @@
   try{const w=s.frame.contentWindow;extra=typeof w.IecNativeReportP086==='function'?(w.IecNativeReportP086()||{}):{};talk=w.IecTalkP012?(w.IecTalkP012.diagnostics()||{}):{};}catch(ignore){}
   const report={version:'P086-ENTRY-DIAG-1',at:s.at,background:s.background,operationReadyP086:{
    version:'P086-OPERATIONS-1',path:'firebase',...numbers(s.metrics,['screenReadyMs','latestCardMs','talkReadyMs','privateHtmlMs','bootstrapMs']),gasCalls:number(s.gasCalls),
-    revision:['P086-FIX-1','P086-FIX-2','P086-FIX-3','P086-FIX-4','P086-FIX-5','P086-FIX-6'].includes(extra.revision)?extra.revision:'unconfirmed',
+    revision:['P086-FIX-1','P086-FIX-2','P086-FIX-3','P086-FIX-4','P086-FIX-5','P086-FIX-6','P086-FIX-7'].includes(extra.revision)?extra.revision:'unconfirmed',
    rpcErrors:(Array.isArray(extra.rpcErrors)?extra.rpcErrors:[]).filter(e=>e&&typeof e==='object').slice(-8).map(e=>({
     method:typeof e.method==='string'&&/^[A-Za-z][A-Za-z0-9_]{0,89}$/.test(e.method)?e.method:'unknown',
     code:['AUTH','RECONNECT','REQUEST','NORMAL_ENTRY_REQUIRED','DUPLICATE','RPC','UNAVAILABLE','RATE_LIMIT','UNKNOWN'].includes(e.code)?e.code:'UNKNOWN'
@@ -748,7 +748,7 @@
   'use strict';
   const APP='iec-board-badge', PROTOCOL=1;
   const URL_KEY='iec.board.pwa.gasUrl.v1';
-  const VERSION='2026.11.16-D19';
+  const VERSION='2026.11.16-D20';
   const ENTRY=new URL('./',window.location.href);
   const NOTIFY_KEY='iec.board.pwa.notifications:'+ENTRY.pathname;
   const NOTIFY_TAG=APP+':'+ENTRY.pathname+':snapshot';

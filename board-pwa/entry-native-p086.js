@@ -66,7 +66,7 @@
   try{const w=s.frame.contentWindow;extra=typeof w.IecNativeReportP086==='function'?(w.IecNativeReportP086()||{}):{};talk=w.IecTalkP012?(w.IecTalkP012.diagnostics()||{}):{};}catch(ignore){}
   const report={version:'P086-ENTRY-DIAG-1',at:s.at,background:s.background,operationReadyP086:{
    version:'P086-OPERATIONS-1',path:'firebase',...numbers(s.metrics,['screenReadyMs','latestCardMs','talkReadyMs','privateHtmlMs','bootstrapMs']),gasCalls:number(s.gasCalls),
-    revision:['P086-FIX-1','P086-FIX-2','P086-FIX-3','P086-FIX-4','P086-FIX-5','P086-FIX-6'].includes(extra.revision)?extra.revision:'unconfirmed',
+    revision:['P086-FIX-1','P086-FIX-2','P086-FIX-3','P086-FIX-4','P086-FIX-5','P086-FIX-6','P086-FIX-7'].includes(extra.revision)?extra.revision:'unconfirmed',
    rpcErrors:(Array.isArray(extra.rpcErrors)?extra.rpcErrors:[]).filter(e=>e&&typeof e==='object').slice(-8).map(e=>({
     method:typeof e.method==='string'&&/^[A-Za-z][A-Za-z0-9_]{0,89}$/.test(e.method)?e.method:'unknown',
     code:['AUTH','RECONNECT','REQUEST','NORMAL_ENTRY_REQUIRED','DUPLICATE','RPC','UNAVAILABLE','RATE_LIMIT','UNKNOWN'].includes(e.code)?e.code:'UNKNOWN'

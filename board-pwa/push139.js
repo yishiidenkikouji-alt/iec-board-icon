@@ -6,7 +6,7 @@
  const panel=document.createElement('section');panel.id='pushSettings139';
  panel.innerHTML='<h3>🔔 通知</h3><p id="pushStatus139" role="status">通知設定を確認しています。</p><div class="buttons"><button type="button" id="pushEnable139">通知を有効にする</button><button type="button" id="pushTest139">テスト通知を送る</button><button type="button" id="pushStop139">この端末の通知を停止</button></div><p class="small">新しい未読・要確認を通知します。トークと配信の保存後に通知処理を開始し、約5分ごとの確認で再試行や期限の変化を補います。音はiPhoneの消音・集中モード・通知設定に従います。</p><p id="pushAdminHelp139" class="small" hidden>最初の1回だけ、システム管理者が会社共通の自動送信を開始してください。</p><div class="buttons"><button type="button" id="pushSetup139" hidden>通知の初回設定・自動送信を開始</button></div><p id="pushResult139" role="status" aria-live="polite"></p>';
  const header=document.querySelector('#settingsSheet .sheet-heading');header.insertAdjacentElement('afterend',panel);
- const el=id=>document.getElementById(id);let info=null,busy=false,checked=false,refreshing=null,epoch=0;
+ const el=id=>document.getElementById(id);let info=null,busy=false,checked=false,refreshing=null,epoch=0,failures=0,retryAfter=0;
  function standalone(){return !!navigator.standalone||matchMedia('(display-mode: standalone)').matches;}
  function reason(){
   if(!window.isSecureContext||!('serviceWorker' in navigator)||!('PushManager' in window)||!('Notification' in window))return 'この環境では通知を利用できません。iPhoneはiOS 16.4以降で、ホーム画面に追加したアイコンから開いてください。';
@@ -46,8 +46,10 @@
  async function refresh(){
   if(refreshing)return refreshing;
   const generation=epoch;
-  refreshing=(async()=>{try{const value=await transport.request('status');if(generation!==epoch)return;await syncLocal(value,generation);if(generation!==epoch)return;info=value;checked=true;status();}catch(e){if(generation===epoch){note(e.message||e);status();}}finally{refreshing=null;}})();return refreshing;
+  refreshing=(async()=>{try{const value=await transport.request('status');if(generation!==epoch)return;await syncLocal(value,generation);if(generation!==epoch)return;info=value;checked=true;failures=0;retryAfter=0;note('');status();}catch(e){if(generation===epoch){checked=false;failures=Math.min(failures+1,5);retryAfter=Date.now()+Math.min(300000,30000*Math.pow(2,failures-1));note(e.message||e);status();}}finally{refreshing=null;}})();return refreshing;
  }
+ // Retry only on an existing foreground event, never start a polling timer.
+ function autoRefresh(){if(!document.hidden&&transport.connected()&&!checked&&!busy&&Date.now()>=retryAfter)void refresh();}
  async function act(fn){if(busy)return;busy=true;status();note('処理しています…');try{await fn();}catch(e){note(e.message||e);}finally{busy=false;status();}}
  el('pushSetup139').onclick=()=>act(async()=>{
   const pair=await crypto.subtle.generateKey({name:'ECDSA',namedCurve:'P-256'},true,['sign','verify']);
@@ -75,8 +77,9 @@
   try{await transport.request('unsubscribe');note('この端末の通知を停止しました。');}catch(e){note('端末の通知は停止しました。サーバーの停止確認は、接続後にもう一度押してください。');}
  });
  window.addEventListener('iec-push-settings139',()=>{status();void refresh();});
- window.addEventListener('iec-push-ready139',()=>{if(!checked&&!busy)void refresh();});
- window.addEventListener('iec-push-reset139',()=>{epoch++;info=null;checked=false;status();if(!reason())void localChannel('').catch(()=>{});});
+ window.addEventListener('iec-push-ready139',autoRefresh);
+ document.addEventListener('visibilitychange',autoRefresh);
+ window.addEventListener('iec-push-reset139',()=>{epoch++;info=null;checked=false;failures=0;retryAfter=0;status();if(!reason())void localChannel('').catch(()=>{});});
  navigator.serviceWorker&&navigator.serviceWorker.addEventListener('message',event=>{if(event.data&&event.data.type==='push-open139'){if(transport.openNotice)transport.openNotice(event.data.routeP015);else transport.refresh();}});
  status();
 })();

@@ -5,8 +5,8 @@
 'use strict';
 const ROOT=new URL('./',self.location.href);
 const PREFIX='iec-board-pwa-shell:'+ROOT.pathname+':';
-const CACHE=PREFIX+'v63-entry-d19';
-const FILES=['./','./index.html','./styles.css','./config.js','./entry-startup-d19.js','./entry-native-p086.js','./entry-startup.js','./connection-diagnostics.js','./entry-session.js','./app.js','./push139.js','./settings-menu.js','./manifest.webmanifest'];
+const CACHE=PREFIX+'v64-entry-d20';
+const FILES=['./','./index.html','./styles.css','./config.js','./entry-startup-d20.js','./entry-native-p086.js','./entry-startup.js','./connection-diagnostics.js','./entry-session.js','./app.js','./push139.js','./settings-menu.js','./manifest.webmanifest'];
 const PUBLIC_URLS=FILES.map(path=>new URL(path,ROOT).href);
 self.addEventListener('install',event=>{
   // Do not populate a new shell cache from still-fresh older HTTP responses.
